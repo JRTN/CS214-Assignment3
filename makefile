@@ -6,7 +6,7 @@ libnetfiles.o: libnetfiles.c libnetfiles.h
 	$(CC) $(CFLAGS) -c libnetfiles.c
 
 netfileserver: netfileserver.c
-	$(CC) $(CFLAGS) -o $@ netfileserver.c
+	$(CC) $(CFLAGS) -pthread -o $@ netfileserver.c
 
 testclient: testclient.c
 	$(CC) -o $@ testclient.c
