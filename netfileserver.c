@@ -1,25 +1,3 @@
-/*
-    Basic idea:
-    Main - Job is only to accept new connections
-    - Creates socket
-    - Binds socket to port
-    - Listens on it
-    - calls accept(serversocket)
-        - when accept is called, new thread is called to handle connection
-        - socket returned by accept is copied onto heap and accessed in thread
-            newsock = accept(serversocket)
-            sockptr = malloc(sizeof...)
-            *sockptr = *newsock
-        - Client Service Thread:
-            (void*)clisockhandler(void *args)
-            accesses socket through heap, can now talk to client
-            read from socket and figure out what command is to be run: "open ./ O_W"
-            parses read data and runs the command locally -> int result = open("./", O_W);
-            check errno as needed
-            write negative result to socket unless it's -1, then we have to return something else
-            
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,7 +12,6 @@
 
 void errormsg(const char const * msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
-    exit(EXIT_FAILURE);
 }
 
 void * clientSockHandler(void * arg) {
@@ -49,38 +26,74 @@ void * clientSockHandler(void * arg) {
     int n = 0;
     if ( (n = read(newsockfd, buffer, 255)) < 0) {
         errormsg("ERROR reading from socket", __FILE__, __LINE__);
+        close(newsockfd);
     }
-    printf("Here is the message: %s\n",buffer);
+    printf("%d bytes read\n", n);
+    printf("%s\n", buffer);
     if ((n = write(newsockfd, "I got your message", 18)) < 0) {
         errormsg("ERROR writing to socket", __FILE__, __LINE__);
+        close(newsockfd);
     }
+    close(newsockfd);
     return 0;
 }
 
-int main(void) {
-    /* Set up the socket */
-    struct sockaddr_in serv_addr = {0};
+/*
+    Creates a new TCP IPv4 socket.
+    Return:
+        The file descriptor of the new socket if there are no errors, -1 otherwise
+*/
+static int createSocket() {
     int sockfd;
     if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
        errormsg("ERROR opening socket", __FILE__, __LINE__);
     }
+    return sockfd;
+}
+
+/*
+    Binds an existing socket file descriptor to the port defined by the macro PORT. The
+    binding is set up to accept connections to all the IPs of the machine.
+    Arguments:
+        sockfd - the file descriptor of the socket that will be bound
+    Return:
+        0 if the socket is bound to the port successfully, -1 otherwise.
+*/
+static int bindSocket(int sockfd) {
+    struct sockaddr_in serv_addr = {0};
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(PORT);
-    /* Bind the socket to the port */
     if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
         errormsg("ERROR on binding", __FILE__, __LINE__);
+        return -1;
     }
+    return 0;
+}
+
+/*
+    Accepts a new connection on the socket and returns the new socket file descriptor
+    Arguments:
+        sockfd - the file descriptor of the socket from which the connection will be accepted
+    Return:
+        The file descriptor of the socket which results from the call to accept, -1 otherwise
+*/
+static int acceptFromSocket(int sockfd) {
+    struct sockaddr_in cli_addr = {0};
+    socklen_t clilen = sizeof(cli_addr);
+    int newsockfd;
+    if((newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen)) < 0) {
+        errormsg("ERROR on accept", __FILE__, __LINE__);
+    }
+    return newsockfd;
+}
+
+int main(void) {
+    int sockfd = createSocket();
+    bindSocket(sockfd);
     while(1) {
-        /* Listen on the socket */
         listen(sockfd, BACKLOG_SIZE);
-        /* Call accept on the socket */
-        struct sockaddr_in cli_addr = {0};
-        socklen_t clilen = sizeof(cli_addr);
-        int newsockfd;
-        if( (newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen)) < 0) {
-            errormsg("ERROR on accept", __FILE__, __LINE__);
-        }
+        int newsockfd = acceptFromSocket(sockfd);
         /* Place the new socket file descriptor on the heap so it can be used by the new thread */
         int *heapSocketfd = malloc(sizeof(int));
         *heapSocketfd = newsockfd;
