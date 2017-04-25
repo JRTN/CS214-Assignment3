@@ -8,7 +8,7 @@ int main(int argc, char **argv) {
         return 0;
     }
     netserverinit(argv[1]);
-    netopen("temp", 0);
-    netopen("two", 2);
-    netopen("three", 3);
+    int filed = netopen("~/Desktop/Some/Directory", 0);
+    char buffer[256] = {0};
+    netread(filed, buffer, 255);
 }

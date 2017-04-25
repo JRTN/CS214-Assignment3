@@ -15,17 +15,37 @@ void errormsg(const char const * msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
 }
 
-int netopen(const char *pathname, int flags) {
-    char buffer[256] = {0};
-    printf("Enter a message: ");
-    fgets(buffer, 255, stdin);
-    int n = 0;
-    if((n = write(sockfd, buffer, strlen(buffer))) < 0) {
+static int sendMessageToSocket(const char const *message) {
+    int wrotebits = 0;
+    if((wrotebits = write(sockfd, message, strlen(message))) < 0) {
         errormsg("ERROR writing to socket", __FILE__, __LINE__);
         return -1;
     }
-    memset(buffer, 0, 256);
-    if((n = read(sockfd, buffer, 255)) < 0) {
+    return wrotebits;
+}
+
+static char *buildOpenRequest(const char *pathname, int flags) {
+    size_t pathlen = strlen(pathname);
+    //extra spaces needed: 1 for null terminator, 1 for flag, 1 for mode character
+    //request is of the form [r|w|o][1|2|3][pathname]
+    char *omessage = malloc(pathlen + 3);
+    sprintf(omessage, "%c%d%s", 'o', flags, pathname);
+    return omessage;
+}
+
+int netopen(const char *pathname, int flags) {
+    //create request containing necessary information
+    char *orequest = buildOpenRequest(pathname, flags);
+    //send request to server
+    int wrotebits = sendMessageToSocket(orequest);
+    free(orequest);
+    if(wrotebits < 0) {
+        //error
+    }
+    //read server's response
+    char buffer[256] = {0};
+    int readbits = 0;
+    if((readbits = read(sockfd, buffer, 255)) < 0) {
         errormsg("Error reading socket response", __FILE__, __LINE__);
         return -1;
     }
@@ -33,7 +53,15 @@ int netopen(const char *pathname, int flags) {
     return 0;
 }
 
+static char *buildReadRequest(int fildes, size_t nbyte) {
+    return 0;
+}
+
 ssize_t netread(int fildes, void *buf, size_t nbyte) {
+    return 0;
+}
+
+static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
     return 0;
 }
 

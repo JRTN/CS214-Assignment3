@@ -11,11 +11,8 @@ netfileserver: netfileserver.c
 testclient: testclient.c
 	$(CC) -o $@ testclient.c
 
-testserver: testserver.c
-	$(CC) -o $@ testserver.c
-
 testdriver: driver.c libnetfiles.o
 	$(CC) -o $@ driver.c libnetfiles.o
 
 clean:
-	rm -f $(OBJS) netfileserver testclient testserver testdriver
+	rm -f $(OBJS) netfileserver testclient testdriver
