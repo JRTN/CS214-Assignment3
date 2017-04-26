@@ -95,12 +95,12 @@ int main(void) {
     //Listen for connections with the listen() system call
     listen(sockfd, BACKLOG_SIZE);
     int clientSocket = 0;
-    //Accept a connection with the accept() system call
+    pthread_t connectionThread;
+//Accept a connection with the accept() system call
     while( (clientSocket = acceptFromSocket(sockfd) )) {
         //Accept a connection with the accept() system call
         int *heapSocketfd = malloc(sizeof(int));
         *heapSocketfd = clientSocket;
-        pthread_t connectionThread;
         int ptc = 0;
         if( (ptc = pthread_create(&connectionThread, NULL, clientSockHandler, (void*) heapSocketfd)) < 0) {
             errormsg("ERROR creating connection handling thread", __FILE__, __LINE__);
