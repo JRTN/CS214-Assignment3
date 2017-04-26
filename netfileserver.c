@@ -10,24 +10,29 @@
 
 #define PORT 40690
 #define BACKLOG_SIZE 5
+#define THREAD_LIMIT 5
+
+typedef struct thread_info_t{
+    int client_fd;
+    struct sockaddr_in client_addr;
+    socklen_t client_addr_len;
+} thread_info_t;
 
 void errormsg(const char const * msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
 }
 
-void * clientSockHandler(void * arg) {
-    int newsockfd = *(int*)arg;
-
-    char buffer[256] = {0};
-    int n = 0;
-    if((n = read(newsockfd, buffer, 255) < 0)) {
-        errormsg("ERROR reading from socket", __FILE__, __LINE__);
-    } else {
-        printf("%d bytes read\n", n);
-        printf("%s\n", buffer);
+void * clientHandler(void * client) {
+    thread_info_t* client_data = (thread_info_t*) client;
+    #define clientfd client_data->client_fd
+    char buffer[4096] = {0};
+    if(read(clientfd, &buffer, 4095) > 0) {
+        printf("Client (%d) message: %s\n", clientfd, buffer);
     }
-    close(newsockfd);
-    free(arg);
+    if(write(clientfd, &buffer, 255)) {
+        printf("Message sent\n");
+    }
+    #undef clientfd
     return 0;
 }
 
@@ -75,7 +80,7 @@ static int bindSocket(int sockfd) {
     Return:
         The file descriptor of the socket which results from the call to accept, -1 otherwise
 */
-static int acceptFromSocket(int sockfd) {
+/*static int acceptFromSocket(int sockfd) {
     struct sockaddr_in cli_addr = {0};
     socklen_t clilen = sizeof(cli_addr);
     int newsockfd;
@@ -85,7 +90,7 @@ static int acceptFromSocket(int sockfd) {
         printf("New connection accepted on socket (%d), connection socket is (%d)\n", sockfd, newsockfd);
     }
     return newsockfd;
-}
+}*/
 
 int main(void) {
     //Create a socket with the socket() system call
@@ -94,18 +99,23 @@ int main(void) {
     bindSocket(sockfd);
     //Listen for connections with the listen() system call
     listen(sockfd, BACKLOG_SIZE);
-    int clientSocket = 0;
-    pthread_t connectionThread;
-//Accept a connection with the accept() system call
-    while( (clientSocket = acceptFromSocket(sockfd) )) {
-        //Accept a connection with the accept() system call
-        int *heapSocketfd = malloc(sizeof(int));
-        *heapSocketfd = clientSocket;
-        int ptc = 0;
-        if( (ptc = pthread_create(&connectionThread, NULL, clientSockHandler, (void*) heapSocketfd)) < 0) {
-            errormsg("ERROR creating connection handling thread", __FILE__, __LINE__);
+    pthread_t * threads = malloc(sizeof(pthread_t) * THREAD_LIMIT);
+    thread_info_t * thread_info = malloc(sizeof(thread_info_t) * THREAD_LIMIT);
+    int client_count = -1;
+    //Accept a connection with the accept() system call
+    while(1) {
+        client_count++;
+        thread_info[client_count].client_fd = accept(sockfd, (struct sockaddr*) &(thread_info[client_count].client_addr),
+                                                     &thread_info[client_count].client_addr_len);
+        if(thread_info[client_count].client_fd < 0) {
+            return 0;
         } else {
-            printf("Created handler thread for connection socket (%d)\n", clientSocket);
+            printf("Connection accepted on socket (%d)\n", sockfd);
+            printf("Client socket fd: %d\n", thread_info[client_count].client_fd);
+        }
+        int ptc = pthread_create(&threads[client_count], NULL, clientHandler, (void*) &thread_info[client_count]);
+        if(ptc < 0) {
+            //error
         }
     }
     return 0; 
