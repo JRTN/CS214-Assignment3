@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #define PORT 40690
 #define BACKLOG_SIZE 5
@@ -15,26 +16,18 @@ void errormsg(const char const * msg, const char const *file, const int line) {
 }
 
 void * clientSockHandler(void * arg) {
-    pthread_mutex_t socket_mutex;
-    pthread_mutex_init(&socket_mutex, NULL);
-
-    pthread_mutex_lock(&socket_mutex);
-    int newsockfd = *((int*)arg);
-    pthread_mutex_unlock(&socket_mutex);
+    int newsockfd = *(int*)arg;
 
     char buffer[256] = {0};
     int n = 0;
-    if ( (n = read(newsockfd, buffer, 255)) < 0) {
+    if((n = read(newsockfd, buffer, 255) < 0)) {
         errormsg("ERROR reading from socket", __FILE__, __LINE__);
-        close(newsockfd);
-    }
-    printf("%d bytes read\n", n);
-    printf("%s\n", buffer);
-    if ((n = write(newsockfd, "I got your message", 18)) < 0) {
-        errormsg("ERROR writing to socket", __FILE__, __LINE__);
-        close(newsockfd);
+    } else {
+        printf("%d bytes read\n", n);
+        printf("%s\n", buffer);
     }
     close(newsockfd);
+    free(arg);
     return 0;
 }
 
@@ -46,7 +39,9 @@ void * clientSockHandler(void * arg) {
 static int createSocket() {
     int sockfd;
     if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-       errormsg("ERROR opening socket", __FILE__, __LINE__);
+        errormsg("ERROR opening socket", __FILE__, __LINE__);
+    } else {
+        printf("Socket (%d) successfully created\n", sockfd);
     }
     return sockfd;
 }
@@ -62,11 +57,13 @@ static int createSocket() {
 static int bindSocket(int sockfd) {
     struct sockaddr_in serv_addr = {0};
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_port = htons(PORT);
     if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
         errormsg("ERROR on binding", __FILE__, __LINE__);
         return -1;
+    } else {
+        printf("Socket (%d) successfully bound to port %d\n", sockfd, PORT);
     }
     return 0;
 }
@@ -84,24 +81,31 @@ static int acceptFromSocket(int sockfd) {
     int newsockfd;
     if((newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen)) < 0) {
         errormsg("ERROR on accept", __FILE__, __LINE__);
+    } else {
+        printf("New connection accepted on socket (%d), connection socket is (%d)\n", sockfd, newsockfd);
     }
     return newsockfd;
 }
 
 int main(void) {
+    //Create a socket with the socket() system call
     int sockfd = createSocket();
+    //Bind the socket to an address using the bind() system call
     bindSocket(sockfd);
-    while(1) {
-        listen(sockfd, BACKLOG_SIZE);
-        int newsockfd = acceptFromSocket(sockfd);
-        /* Place the new socket file descriptor on the heap so it can be used by the new thread */
+    //Listen for connections with the listen() system call
+    listen(sockfd, BACKLOG_SIZE);
+    int clientSocket = 0;
+    //Accept a connection with the accept() system call
+    while( (clientSocket = acceptFromSocket(sockfd) )) {
+        //Accept a connection with the accept() system call
         int *heapSocketfd = malloc(sizeof(int));
-        *heapSocketfd = newsockfd;
-        /* Create the new thread and pass it the new file descriptor */
+        *heapSocketfd = clientSocket;
         pthread_t connectionThread;
         int ptc = 0;
-        if( (ptc = pthread_create(&connectionThread, NULL, clientSockHandler, (void*) heapSocketfd)) != 0) {
+        if( (ptc = pthread_create(&connectionThread, NULL, clientSockHandler, (void*) heapSocketfd)) < 0) {
             errormsg("ERROR creating connection handling thread", __FILE__, __LINE__);
+        } else {
+            printf("Created handler thread for connection socket (%d)\n", clientSocket);
         }
     }
     return 0; 

@@ -8,6 +8,10 @@
 #define O_WRONLY 2
 #define O_RDWR   3
 
+#define READ 1
+#define WRITE 2
+
+
 /* ERROR CODES 
 #define EACCES             1
 #define EINTR              2

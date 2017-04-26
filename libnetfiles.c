@@ -79,6 +79,13 @@ static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
 }
 
 ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
+    char *wrequest = buildWriteRequest(fildes, buf, nbyte);
+    int wrotebits = sendMessageToSocket(wrequest);
+    free(wrequest);
+    if(wrotebits < 0) {
+        //error
+    }
+    printSocketResponse();
     return 0;
 }
 
@@ -87,10 +94,13 @@ int netclose(int fd) {
 }
 
 int netserverinit(char *hostname) {
+    //Create socket with socket() system call
+    int sockfd = 0;
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         errormsg("ERROR opening socket", __FILE__, __LINE__);
         return -1;
     }
+    //Get server information
     struct hostent *server;
     if(!(server = gethostbyname(hostname))) {
         errormsg("ERROR no such host", __FILE__, __LINE__);
@@ -100,9 +110,10 @@ int netserverinit(char *hostname) {
     serv_addr.sin_family = AF_INET;
     memcpy((void *)&serv_addr.sin_addr.s_addr, (void *)server->h_addr, server->h_length);
     serv_addr.sin_port = htons(PORT);
+    //Connect the socket to the address of the server using the connect() system call
     if(connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
         errormsg("ERROR can't connect to host", __FILE__, __LINE__);
         return -1;
     }
-    return 0;
+    return sockfd;
 }
