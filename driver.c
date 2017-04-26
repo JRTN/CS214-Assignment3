@@ -9,6 +9,6 @@ int main(int argc, char **argv) {
     }
     netserverinit(argv[1]);
     int filed = netopen("~/Desktop/Some/Directory", 0);
-    char buffer[256] = {0};
-    netread(filed, buffer, 255);
+    //char buffer[256] = {0};
+    netwrite(filed, "some message", 255);
 }

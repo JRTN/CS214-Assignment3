@@ -33,6 +33,7 @@ void * clientHandler(void * client) {
         if(write(clientfd, &buffer, 255)) {
             printf("Message sent\n");
         }
+        
     }
 
     #undef clientfd

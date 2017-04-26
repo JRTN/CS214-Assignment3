@@ -9,10 +9,29 @@
 
 #include "libnetfiles.h"
 
+#define MAXINT 2147483647
+#define MININT -2147483648
+
 static int sockfd = -1;
 
 void errormsg(const char const * msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
+}
+
+int numPlaces (int n) {
+    if (n < 0) n = (n == MININT) ? MAXINT : -n;
+    if (n < 10) return 1;
+    if (n < 100) return 2;
+    if (n < 1000) return 3;
+    if (n < 10000) return 4;
+    if (n < 100000) return 5;
+    if (n < 1000000) return 6;
+    if (n < 10000000) return 7;
+    if (n < 100000000) return 8;
+    if (n < 1000000000) return 9;
+    /*      2147483647 is 2^31-1 - add more ifs as needed
+       and adjust this final return as well. */
+    return 10;
 }
 
 static int sendMessageToSocket(const char const *message) {
@@ -75,7 +94,15 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
 }
 
 static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
-    return 0;
+    int fildes_size = numPlaces(fildes);
+    int nbyte_size = numPlaces(fildes);
+    
+    //SEGMENTATION FAULT
+    char *wrequest = malloc(fildes_size + nbyte_size + nbyte + 5);
+    sprintf(wrequest, "%c#%d#%zu#", 'w', fildes, nbyte);
+    strncpy((char *)(buf + fildes_size + nbyte_size), (char*)buf, nbyte);
+    wrequest[fildes_size + nbyte_size + nbyte + 4] = 0;
+    return wrequest;
 }
 
 ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
