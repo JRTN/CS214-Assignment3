@@ -24,6 +24,15 @@ static int sendMessageToSocket(const char const *message) {
     return wrotebits;
 }
 
+static void printSocketResponse() {
+    char buffer[256] = {0};
+    int readbits = 0;
+    if((readbits = read(sockfd, buffer, 255)) < 0) {
+        errormsg("Error reading socket response", __FILE__, __LINE__);
+    }
+    printf("%s\n", buffer);
+}
+
 static char *buildOpenRequest(const char *pathname, int flags) {
     size_t pathlen = strlen(pathname);
     //extra spaces needed: 1 for null terminator, 1 for flag, 1 for mode character
@@ -43,21 +52,25 @@ int netopen(const char *pathname, int flags) {
         //error
     }
     //read server's response
-    char buffer[256] = {0};
-    int readbits = 0;
-    if((readbits = read(sockfd, buffer, 255)) < 0) {
-        errormsg("Error reading socket response", __FILE__, __LINE__);
-        return -1;
-    }
-    printf("%s\n", buffer);
+    printSocketResponse();
     return 0;
 }
 
 static char *buildReadRequest(int fildes, size_t nbyte) {
-    return 0;
+    char *rrequest = malloc(200);
+    sprintf(rrequest, "%s", "Read Request");
+    return rrequest;
 }
 
 ssize_t netread(int fildes, void *buf, size_t nbyte) {
+    char *rrequest = buildReadRequest(fildes, nbyte);
+    int wrotebits = sendMessageToSocket(rrequest);
+    free(rrequest);
+    if(wrotebits < 0) {
+        //error
+    }
+    //read server's response
+    printSocketResponse();
     return 0;
 }
 
