@@ -26,12 +26,15 @@ void * clientHandler(void * client) {
     thread_info_t* client_data = (thread_info_t*) client;
     #define clientfd client_data->client_fd
     char buffer[4096] = {0};
-    if(read(clientfd, &buffer, 4095) > 0) {
-        printf("Client (%d) message: %s\n", clientfd, buffer);
+    while(1) {
+        if(read(clientfd, &buffer, 4095) > 0) {
+            printf("Client (%d) message: %s\n", clientfd, buffer);
+        }
+        if(write(clientfd, &buffer, 255)) {
+            printf("Message sent\n");
+        }
     }
-    if(write(clientfd, &buffer, 255)) {
-        printf("Message sent\n");
-    }
+
     #undef clientfd
     return 0;
 }
