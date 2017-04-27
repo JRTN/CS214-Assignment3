@@ -29,6 +29,17 @@ void * clientHandler(void * client) {
     while(1) {
         if(read(clientfd, &buffer, 4095) > 0) {
             printf("Client (%d) message: %s\n", clientfd, buffer);
+            switch(buffer[0]) {
+                case 'o':{
+                        //do open
+                }
+                case 'r':{
+                        //do read
+                }
+                case 'w':{
+                        //do write
+                }
+           }
         }
         if(write(clientfd, &buffer, 255)) {
             printf("Message sent\n");
