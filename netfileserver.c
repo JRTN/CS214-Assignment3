@@ -89,18 +89,27 @@ long int getMessageSize(const char const * message) {
 }
 
 char * performReadOp(const char * message) {
+    printf("Perform Read Op\n");
     return NULL;
 }
 
 char * performWriteOp(const char * message) {
+    printf("Perform Write Op\n");
     return NULL;
 }
 
 char * performOpenOp(const char * message) {
+    printf("Perform Open Op\n");
     return NULL;
 }
 
 char * performCloseOp(const char * message) {
+    printf("Perform Close Op\n");
+    return NULL;
+}
+
+char * performInvalidOp(const char * message) {
+    printf("Perform Invalid Op\n");
     return NULL;
 }
 
@@ -115,14 +124,15 @@ char * handleClientMessage(const char * message) {
     //Advance to first delimiter
     while(*message && *message != DELIMITER) message++;
     //Advance to character after delimiter
-    message = safeAdvanceCharacters(message, 2);
+    message = safeAdvanceCharacters(message, 1);
     if(!*message) return NULL; //wasn't able to advance two characters before hitting end of string
+    printf("Operation: %c\n", *message);
     switch(*message) {
         case OPEN_OP:  return performOpenOp(message);
         case READ_OP:  return performReadOp(message);
         case WRITE_OP: return performWriteOp(message);
         case CLOSE_OP: return performCloseOp(message);
-        default:       return NULL; //invalid operation
+        default:       return performInvalidOp(message); //invalid operation
     }
 }
 
@@ -131,11 +141,14 @@ void * clientHandler(void * client) {
     #define clientfd client_data->client_fd
     char buffer[4096] = {0};
     char *response = NULL;
+    int readbytes = 0;
     while(1) {
-        if(read(clientfd, &buffer, 4096) > 0) {
+        if( (readbytes = read(clientfd, &buffer, 4096)) > 0) {
+            long int expectedsize = getMessageSize(buffer);
             printf("Client (%d) message: %s\n", clientfd, buffer);
+            printf("Read Bytes: %d Expected Bytes: %ld\n", readbytes, expectedsize);
             response = handleClientMessage(buffer);
-
+            response = "I got your message";
             if(write(clientfd, response, strlen(response)) < 0) {
                 //error
             }
@@ -189,7 +202,9 @@ int main(void) {
     //Create a socket with the socket() system call
     int sockfd = createSocket();
     //Bind the socket to an address using the bind() system call
-    bindSocket(sockfd);
+    if(bindSocket(sockfd) == -1) {
+        return EXIT_FAILURE; //error binding socket
+    }
     //Listen for connections with the listen() system call
     listen(sockfd, BACKLOG_SIZE);
     pthread_t * threads = malloc(sizeof(pthread_t) * THREAD_LIMIT);
