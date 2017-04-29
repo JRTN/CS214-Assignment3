@@ -15,6 +15,11 @@
 #define CHUNK_SIZE 5
 #define DELIMITER '!'
 
+#define READ_OP 'r'
+#define WRITE_OP 'w'
+#define OPEN_OP 'o'
+#define CLOSE_OP 'c'
+
 typedef struct thread_info_t{
     int client_fd;
     struct sockaddr_in client_addr;
@@ -23,6 +28,12 @@ typedef struct thread_info_t{
 
 void errormsg(const char const * msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
+}
+
+char * safeAdvanceCharacters(const char *str, const size_t amt) {
+    int i;
+    for(i = 0; i < amt && *str; i++) str++;
+    return (char *)str;
 }
 
 /*
@@ -77,22 +88,57 @@ long int getMessageSize(const char const * message) {
     return result;
 }
 
+char * performReadOp(const char * message) {
+    return NULL;
+}
+
+char * performWriteOp(const char * message) {
+    return NULL;
+}
+
+char * performOpenOp(const char * message) {
+    return NULL;
+}
+
+char * performCloseOp(const char * message) {
+    return NULL;
+}
+
 /*
     Extracts the necessary information from a client message and calls the appropriate
-    functions to perform the operations on the machine. 
+    functions to perform the operations on the machine.
+    Parameters:
+        message - the message that will be parsed
 */
-void handleClientMessage(const char * message) {
-    
+char * handleClientMessage(const char * message) {
+    if(!message) return NULL; //error
+    //Advance to first delimiter
+    while(*message && *message != DELIMITER) message++;
+    //Advance to character after delimiter
+    message = safeAdvanceCharacters(message, 2);
+    if(!*message) return NULL; //wasn't able to advance two characters before hitting end of string
+    switch(*message) {
+        case OPEN_OP:  return performOpenOp(message);
+        case READ_OP:  return performReadOp(message);
+        case WRITE_OP: return performWriteOp(message);
+        case CLOSE_OP: return performCloseOp(message);
+        default:       return NULL; //invalid operation
+    }
 }
 
 void * clientHandler(void * client) {
     thread_info_t* client_data = (thread_info_t*) client;
     #define clientfd client_data->client_fd
     char buffer[4096] = {0};
+    char *response = NULL;
     while(1) {
         if(read(clientfd, &buffer, 4096) > 0) {
             printf("Client (%d) message: %s\n", clientfd, buffer);
-            handleClientMessage(buffer);
+            response = handleClientMessage(buffer);
+
+            if(write(clientfd, response, strlen(response)) < 0) {
+                //error
+            }
         } else {
             //error receiving message from client
         }
