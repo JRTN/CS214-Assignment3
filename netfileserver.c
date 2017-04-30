@@ -3,7 +3,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -14,11 +18,18 @@
 #define THREAD_LIMIT 5
 #define CHUNK_SIZE 5
 #define DELIMITER '!'
+#define MAX_INT_LENGTH 11
 
 #define READ_OP 'r'
 #define WRITE_OP 'w'
 #define OPEN_OP 'o'
 #define CLOSE_OP 'c'
+
+#define OUR_O_RDONLY 1
+#define OUR_O_WRONLY 2
+#define OUR_O_RDWR   3
+
+#define NEG_ONE_FD 100000
 
 typedef struct thread_info_t{
     int client_fd;
@@ -26,7 +37,7 @@ typedef struct thread_info_t{
     socklen_t client_addr_len;
 } thread_info_t;
 
-void errormsg(const char const * msg, const char const *file, const int line) {
+void errormsg(const char const *msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
 }
 
@@ -34,6 +45,13 @@ char * safeAdvanceCharacters(const char *str, const size_t amt) {
     int i;
     for(i = 0; i < amt && *str; i++) str++;
     return (char *)str;
+}
+
+char * intToStr(const int num) {
+    char *result = malloc(MAX_INT_LENGTH);
+    int ret = snprintf(result, MAX_INT_LENGTH, "%d", num);
+    result = realloc(result, ret + 1);
+    return result;
 }
 
 /*
@@ -48,7 +66,7 @@ char * safeAdvanceCharacters(const char *str, const size_t amt) {
         A dynamically allocated token if it is able to be built, or NULL if the token
         cannot be created for some reason.
 */
-char * buildToken(const char * str, const char delim, bool usedelim) {
+char * buildToken(const char *str, const char delim, bool usedelim) {
     if(!str) return NULL;
     size_t size = 0;
     size_t capacity = CHUNK_SIZE;
@@ -81,34 +99,139 @@ char * buildToken(const char * str, const char delim, bool usedelim) {
     Return:
         The size of the message
 */
-long int getMessageSize(const char const * message) {
+long int getMessageSize(const char const *message) {
     char *sizestr = buildToken(message, DELIMITER, true);
     long int result = strtol(sizestr, NULL, 10);
     free(sizestr);
     return result;
 }
 
-char * performReadOp(const char * message) {
-    printf("Perform Read Op\n");
+char * performReadOp(const char *nbyte, const char *filedes) {
+    printf("Perform Read Op:\n");
+    printf("nbyte: %s\n", nbyte);
+    printf("filedes: %s\n", filedes);
+
+    int n_nbyte = strtol(nbyte, NULL, 10);
+    int n_filedes = strtol(filedes, NULL, 10);
+
     return NULL;
 }
 
-char * performWriteOp(const char * message) {
-    printf("Perform Write Op\n");
+char * parseReadMessage(const char *message) {
+    char *nbyte = buildToken(message, DELIMITER, true);
+    size_t adv = strlen(nbyte) + 1;
+    message = safeAdvanceCharacters(message, adv);
+    char *filedes = buildToken(message, DELIMITER, false);
+
+    return performReadOp(nbyte, filedes);;
+}
+
+char * performWriteOp(const char *filedes, const char *nbyte, const char *buffer) {
+    printf("Perform Write Op:\n");
+    printf("filedes: %s\n", filedes);
+    printf("nbyte: %s\n", nbyte);
+    printf("buffer: %s\n", buffer);
+
+    int n_nbyte = strtol(nbyte, NULL, 10);
+    int n_filedes = strtol(filedes, NULL, 10);
+
     return NULL;
 }
 
-char * performOpenOp(const char * message) {
-    printf("Perform Open Op\n");
-    return NULL;
+char * parseWriteMessage(const char *message) {
+    char *filedes = buildToken(message, DELIMITER, true);
+    size_t adv = strlen(filedes) + 1;
+    message = safeAdvanceCharacters(message, adv);
+    char *nbyte = buildToken(message, DELIMITER, true);
+    adv = strlen(nbyte) + 1;
+    message = safeAdvanceCharacters(message, adv);
+    char *buffer = buildToken(message, DELIMITER, false);
+
+    return performWriteOp(filedes, nbyte, buffer);
 }
 
-char * performCloseOp(const char * message) {
-    printf("Perform Close Op\n");
-    return NULL;
+char * buildOpenResponse(int filefd) {
+    char *response = NULL;
+    if(filefd == -1) { //error opening file
+        char *errno_str = strerror(errno);
+        size_t errno_str_length = strlen(errno_str);
+        size_t message_size = errno_str_length + 2;
+    } else {
+        if(filefd == 1) {
+            filefd == NEG_ONE_FD;
+        }
+    }
+    return response;
 }
 
-char * performInvalidOp(const char * message) {
+char * performOpenOp(int flag, const char *pathname) {
+    printf("Perform Open Op:\n");
+    printf("Flag: %d\n", flag);
+    printf("Pathname: %s\n", pathname);
+
+    switch(flag) {
+        case OUR_O_RDONLY:
+            flag = O_RDONLY;
+        break;
+        case OUR_O_WRONLY:
+            flag = O_WRONLY;
+        break;
+        case OUR_O_RDWR:
+            flag = O_RDWR;
+        break;
+    }
+    
+    int filefd = open(pathname, flag);
+    
+    return buildOpenResponse(filefd);
+}
+
+char * parseOpenMessage(const char *message) {
+    int flag = *message - '0';
+    message = safeAdvanceCharacters(message, 2);
+    if(!*message) {
+        //error, hit end of string before finding pathname
+    }
+    char *pathname = buildToken(message, DELIMITER, false);
+
+    return performOpenOp(flag, pathname);
+}
+
+char * buildCloseResponse(int close_result) {
+    char *response = NULL;
+    if(close_result == 0) { //closed successfully
+        //4!0'\0'
+        response = strdup("4!0");
+    } else { //error closing
+        response = strdup("12!-1!EBADF");
+    }
+    return response;
+}
+
+char * performCloseOp(const char *filedes) {
+    printf("Perform Close Op:\n");
+    printf("filedes: %s\n", filedes);
+
+    int n_filedes = strtol(filedes, NULL, 10);
+
+    if(n_filedes == NEG_ONE_FD) {
+        n_filedes = 1;
+    } else {
+        n_filedes = -n_filedes;
+    }
+
+    int result = close(n_filedes);
+
+    return buildCloseResponse(result);
+}
+
+char * parseCloseMessage(const char *message) {
+    char *filedes = buildToken(message, DELIMITER, false);
+
+    return performCloseOp(filedes);
+}
+
+char * performInvalidOp(const char *message) {
     printf("Perform Invalid Op\n");
     return NULL;
 }
@@ -119,7 +242,7 @@ char * performInvalidOp(const char * message) {
     Parameters:
         message - the message that will be parsed
 */
-char * handleClientMessage(const char * message) {
+char * handleClientMessage(const char *message) {
     if(!message) return NULL; //error
     //Advance to first delimiter
     while(*message && *message != DELIMITER) message++;
@@ -127,11 +250,14 @@ char * handleClientMessage(const char * message) {
     message = safeAdvanceCharacters(message, 1);
     if(!*message) return NULL; //wasn't able to advance two characters before hitting end of string
     printf("Operation: %c\n", *message);
-    switch(*message) {
-        case OPEN_OP:  return performOpenOp(message);
-        case READ_OP:  return performReadOp(message);
-        case WRITE_OP: return performWriteOp(message);
-        case CLOSE_OP: return performCloseOp(message);
+    char operation = *message;
+    //Advance to start of unique messages
+    message = safeAdvanceCharacters(message, 2);
+    switch(operation) {
+        case OPEN_OP:  return parseOpenMessage(message);
+        case READ_OP:  return parseReadMessage(message);
+        case WRITE_OP: return parseWriteMessage(message);
+        case CLOSE_OP: return parseCloseMessage(message);
         default:       return performInvalidOp(message); //invalid operation
     }
 }
@@ -148,7 +274,7 @@ void * clientHandler(void * client) {
             printf("Client (%d) message: %s\n", clientfd, buffer);
             printf("Read Bytes: %d Expected Bytes: %ld\n", readbytes, expectedsize);
             response = handleClientMessage(buffer);
-            response = "I got your message";
+            //response = "I got your message";
             if(write(clientfd, response, strlen(response)) < 0) {
                 //error
             }

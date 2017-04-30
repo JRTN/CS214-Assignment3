@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS= -g -Wall -std=c99
+CFLAGS= -g -Wall
 OBJS=libnetfiles.o
 
 libnetfiles.o: libnetfiles.c libnetfiles.h
