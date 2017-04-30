@@ -18,6 +18,39 @@ void errormsg(const char const * msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
 }
 
+char * intToStr(const int num) {
+    char *result = malloc(MAX_INT_LENGTH);
+    int ret = snprintf(result, MAX_INT_LENGTH, "%d", num);
+    result = realloc(result, ret + 1);
+    return result;
+}
+
+char * buildToken(const char *str, const char delim, bool usedelim) {
+    if(!str) return NULL;
+    size_t size = 0;
+    size_t capacity = CHUNK_SIZE;
+    char *token = malloc(capacity);
+    /*  If usedlim is set, then we must check that the current character is not the
+        delimiter. If it is not set, then we don't check and continue on (which is
+        the function of the (!usedelim) check) */
+    while(*str && ((usedelim && *str != delim) || (!usedelim)) ) {
+        size++;
+        if(size >= capacity) {
+            capacity += CHUNK_SIZE;
+            token = realloc(token, capacity);
+        }
+        token[size - 1] = *str++;
+    }
+    if(size <= 0) {
+        free(token);
+        return NULL;
+    }
+    token = realloc(token, size + 1);
+    token[size] = '\0';
+    return token;
+}
+
+
 int numPlaces (int n) {
     if (n < 0) n = (n == MININT) ? MAXINT : -n;
     if (n < 10) return 1;
@@ -56,8 +89,9 @@ static char *buildOpenRequest(const char *pathname, int flags) {
     size_t pathlen = strlen(pathname);
     //extra spaces needed: 1 for null terminator, 1 for flag, 1 for mode character
     //request is of the form [r|w|o][1|2|3][pathname]
-    char *omessage = malloc(pathlen + 3);
-    sprintf(omessage, "%c%d%s", 'o', flags, pathname);
+    int messageSize = pathlen + 10
+    char *omessage = malloc(messageSize);
+    sprintf(omessage, "%d!o!%d!%s",messageSize, flags, pathname);
     return omessage;
 }
 
@@ -77,7 +111,9 @@ int netopen(const char *pathname, int flags) {
 
 static char *buildReadRequest(int fildes, size_t nbyte) {
     char *rrequest = malloc(200);
-    sprintf(rrequest, "%s", "Read Request");
+    int messageSize = strlen(intToStr(filedes))+strlen(intToStr(nbyte))+5;
+    messageSize = messageSize+strlen(intToStr(messageSize));
+    sprintf(rrequest, "%d!r!%d!%d",messageSize,nbyte,fildes);
     return rrequest;
 }
 
@@ -94,14 +130,12 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
 }
 
 static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
-    int fildes_size = numPlaces(fildes);
-    int nbyte_size = numPlaces(fildes);
-    
-    //SEGMENTATION FAULT
-    char *wrequest = malloc(fildes_size + nbyte_size + nbyte + 5);
-    sprintf(wrequest, "%c#%d#%zu#", 'w', fildes, nbyte);
-    strncpy((char *)(buf + fildes_size + nbyte_size), (char*)buf, nbyte);
-    wrequest[fildes_size + nbyte_size + nbyte + 4] = 0;
+    char nullTermBuf[nbyte+1] = {0};
+    memcpy(nullTermBuf, buf, nbyte);
+    char *wrequest = malloc(strlen(intToStr(fildes)) + strlen(intToStr(nbyte))+nbyte + 12);
+    int messageSize = strlen(intToStr(fildes)) + strlen(intToStr(nbyte))+nbyte;
+    int messageSize = messageSize + strlen(intToStr(messageSize))
+    sprintf(wrequest, "%d!w!%d!%d!%s",messageSize,fildes,nbyte,nullTermBuf);
     return wrequest;
 }
 
