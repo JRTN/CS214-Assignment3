@@ -6,11 +6,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <stdbool.h>
 
 #include "libnetfiles.h"
 
 #define MAXINT 2147483647
+#define MAX_INT_LENGTH 11
 #define MININT -2147483648
+#define CHUNK_SIZE 5
 
 static int sockfd = -1;
 
@@ -87,16 +90,13 @@ static void printSocketResponse() {
 
 static char *buildOpenRequest(const char *pathname, int flags) {
     size_t pathlen = strlen(pathname);
-    //extra spaces needed: 1 for null terminator, 1 for flag, 1 for mode character
-    //request is of the form [r|w|o][1|2|3][pathname]
-    int messageSize = pathlen + 10
+    int messageSize = pathlen + 10;
     char *omessage = malloc(messageSize);
     sprintf(omessage, "%d!o!%d!%s",messageSize, flags, pathname);
     return omessage;
 }
 
 int netopen(const char *pathname, int flags) {
-    //create request containing necessary information
     char *orequest = buildOpenRequest(pathname, flags);
     //send request to server
     int wrotebits = sendMessageToSocket(orequest);
@@ -111,9 +111,9 @@ int netopen(const char *pathname, int flags) {
 
 static char *buildReadRequest(int fildes, size_t nbyte) {
     char *rrequest = malloc(200);
-    int messageSize = strlen(intToStr(filedes))+strlen(intToStr(nbyte))+5;
+    int messageSize = strlen(intToStr(fildes))+strlen(intToStr(nbyte))+5;
     messageSize = messageSize+strlen(intToStr(messageSize));
-    sprintf(rrequest, "%d!r!%d!%d",messageSize,nbyte,fildes);
+    sprintf(rrequest, "%d!r!%zu!%d",messageSize,nbyte,fildes);
     return rrequest;
 }
 
@@ -130,12 +130,13 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
 }
 
 static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
-    char nullTermBuf[nbyte+1] = {0};
+    char nullTermBuf[nbyte+1];
+    nullTermBuf[nbyte] = '\0';
     memcpy(nullTermBuf, buf, nbyte);
     char *wrequest = malloc(strlen(intToStr(fildes)) + strlen(intToStr(nbyte))+nbyte + 12);
     int messageSize = strlen(intToStr(fildes)) + strlen(intToStr(nbyte))+nbyte;
-    int messageSize = messageSize + strlen(intToStr(messageSize))
-    sprintf(wrequest, "%d!w!%d!%d!%s",messageSize,fildes,nbyte,nullTermBuf);
+    messageSize = messageSize + strlen(intToStr(messageSize));
+    sprintf(wrequest, "%d!w!%d!%zu!%s",messageSize,fildes,nbyte,nullTermBuf);
     return wrequest;
 }
 
@@ -149,6 +150,15 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
     printSocketResponse();
     return 0;
 }
+
+static char *buildCloseRequest(int fildes){
+    int messageSize = 4+strlen(intToStr(fildes));
+    messageSize = messageSize + strlen(intToStr(fildes));
+    char *cmessage = malloc(messageSize);
+    sprintf(cmessage, "%d!c!%d",messageSize, fildes);
+    return omessage;
+}
+
 
 int netclose(int fd) {
     return 0;
