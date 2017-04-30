@@ -123,7 +123,7 @@ char * parseReadMessage(const char *message) {
     message = safeAdvanceCharacters(message, adv);
     char *filedes = buildToken(message, DELIMITER, false);
 
-    return performReadOp(nbyte, filedes);;
+    return performReadOp(nbyte, filedes);
 }
 
 char * performWriteOp(const char *filedes, const char *nbyte, const char *buffer) {
@@ -150,16 +150,20 @@ char * parseWriteMessage(const char *message) {
     return performWriteOp(filedes, nbyte, buffer);
 }
 
+#define START_SIZE 100
+
 char * buildOpenResponse(int filefd) {
     char *response = NULL;
     if(filefd == -1) { //error opening file
+        //get readable version of errno error code
         char *errno_str = strerror(errno);
-        size_t errno_str_length = strlen(errno_str);
-        size_t message_size = errno_str_length + 2;
+        //find length of readable error
+        response = strdup("Error\n");
     } else {
         if(filefd == 1) {
-            filefd == NEG_ONE_FD;
+            filefd = NEG_ONE_FD;
         }
+        response = strdup("Open message read");
     }
     return response;
 }
