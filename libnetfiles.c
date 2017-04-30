@@ -21,6 +21,14 @@ void errormsg(const char const * msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
 }
 
+long int getMessageSize(const char const *message) {
+    char *sizestr = buildToken(message, DELIMITER, true);
+    long int result = strtol(sizestr, NULL, 10);
+    free(sizestr);
+    return result;
+}
+
+
 char * intToStr(const int num) {
     char *result = malloc(MAX_INT_LENGTH);
     int ret = snprintf(result, MAX_INT_LENGTH, "%d", num);
@@ -53,6 +61,11 @@ char * buildToken(const char *str, const char delim, bool usedelim) {
     return token;
 }
 
+char * safeAdvanceCharacters(const char *str, const size_t amt) {
+    int i;
+    for(i = 0; i < amt && *str; i++) str++;
+    return (char *)str;
+}
 
 int numPlaces (int n) {
     if (n < 0) n = (n == MININT) ? MAXINT : -n;
@@ -71,6 +84,7 @@ int numPlaces (int n) {
 }
 
 static int sendMessageToSocket(const char const *message) {
+    printf("socket %s\n", intToStr(sockfd));
     int wrotebits = 0;
     if((wrotebits = write(sockfd, message, strlen(message))) < 0) {
         errormsg("ERROR writing to socket", __FILE__, __LINE__);
@@ -80,6 +94,7 @@ static int sendMessageToSocket(const char const *message) {
 }
 
 static void printSocketResponse() {
+    printf("socket %d\n", sockfd);
     char buffer[256] = {0};
     int readbits = 0;
     if((readbits = read(sockfd, buffer, 255)) < 0) {
@@ -97,7 +112,9 @@ static char *buildOpenRequest(const char *pathname, int flags) {
 }
 
 int netopen(const char *pathname, int flags) {
+    printf("socket %d\n", sockfd);
     char *orequest = buildOpenRequest(pathname, flags);
+    printf("%s\n",orequest);
     //send request to server
     int wrotebits = sendMessageToSocket(orequest);
     free(orequest);
@@ -105,8 +122,30 @@ int netopen(const char *pathname, int flags) {
         //error
     }
     //read server's response
-    printSocketResponse();
+    parseOpenResponse();
+    
     return 0;
+}
+
+int parseOpenResponse(){
+    char buffer[256] = {0};
+    int readbits = 0;
+    if((readbits = read(sockfd, buffer, 255)) < 0) {
+        errormsg("Error reading socket response", __FILE__, __LINE__);
+    }
+    int size = getMessageSize(buffer);
+    int flag = *(buffer + strlen(size) + 1) - '0';
+    buffer = safeAdvanceCharacters(buffer, 2);
+    if(!*message) {
+        //error, hit end of string before finding pathname
+    }
+    int fd = buildToken(buffer, DELIMITER, true);
+    if(fd == -1){
+        buffer = safeAdvanceCharacters(buffer, 2);
+        
+    }
+
+    return performOpenOp(flag, pathname);
 }
 
 static char *buildReadRequest(int fildes, size_t nbyte) {
@@ -118,6 +157,7 @@ static char *buildReadRequest(int fildes, size_t nbyte) {
 }
 
 ssize_t netread(int fildes, void *buf, size_t nbyte) {
+    printf("socket %d\n", sockfd);
     char *rrequest = buildReadRequest(fildes, nbyte);
     int wrotebits = sendMessageToSocket(rrequest);
     free(rrequest);
@@ -125,11 +165,16 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
         //error
     }
     //read server's response
-    printSocketResponse();
+    parseReadResponse();
     return 0;
 }
 
+ssize_t parseReadResponse(){
+
+}
+
 static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
+    printf("socket %d\n", sockfd);
     char nullTermBuf[nbyte+1];
     nullTermBuf[nbyte] = '\0';
     memcpy(nullTermBuf, buf, nbyte);
@@ -141,32 +186,50 @@ static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
 }
 
 ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
+    printf("socket %d\n", sockfd);
     char *wrequest = buildWriteRequest(fildes, buf, nbyte);
     int wrotebits = sendMessageToSocket(wrequest);
     free(wrequest);
     if(wrotebits < 0) {
         //error
     }
-    printSocketResponse();
+    parseWriteResponse();
     return 0;
 }
 
+ssize_t parseWriteResponse(){
+    
+}
+
 static char *buildCloseRequest(int fildes){
+    printf("socket %d\n", sockfd);
     int messageSize = 4+strlen(intToStr(fildes));
-    messageSize = messageSize + strlen(intToStr(fildes));
+    messageSize = messageSize + strlen(intToStr(messageSize));
     char *cmessage = malloc(messageSize);
     sprintf(cmessage, "%d!c!%d",messageSize, fildes);
-    return omessage;
+    return cmessage;
 }
 
 
 int netclose(int fd) {
+    char *crequest = buildCloseRequest(fd);
+    //send request to server
+    int wrotebits = sendMessageToSocket(crequest);
+    free(crequest);
+    if(wrotebits < 0) {
+        //error
+    }
+    //read server's response
+    parseCloseResponse();
     return 0;
+}
+
+int parseCloseResponse(){
+
 }
 
 int netserverinit(char *hostname) {
     //Create socket with socket() system call
-    int sockfd = 0;
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         errormsg("ERROR opening socket", __FILE__, __LINE__);
         return -1;
@@ -186,5 +249,6 @@ int netserverinit(char *hostname) {
         errormsg("ERROR can't connect to host", __FILE__, __LINE__);
         return -1;
     }
-    return sockfd;
+    printf("socket %d\n", sockfd);
+    return 0;
 }
