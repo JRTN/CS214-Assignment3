@@ -7,10 +7,18 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <stdbool.h>
 
 #define PORT 40690
 #define BACKLOG_SIZE 5
 #define THREAD_LIMIT 5
+#define CHUNK_SIZE 5
+#define DELIMITER '!'
+
+#define READ_OP 'r'
+#define WRITE_OP 'w'
+#define OPEN_OP 'o'
+#define CLOSE_OP 'c'
 
 typedef struct thread_info_t{
     int client_fd;
@@ -22,29 +30,131 @@ void errormsg(const char const * msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
 }
 
+char * safeAdvanceCharacters(const char *str, const size_t amt) {
+    int i;
+    for(i = 0; i < amt && *str; i++) str++;
+    return (char *)str;
+}
+
+/*
+    Builds a token from the given string until the specified delimiter is encountered
+    or the end of the string is reached, depending on how usedelim is set. Memory for
+    the token is dynamically allocated and must be freed by the user.
+    Parameters:
+        str - the string from which the token will be built
+        delim - the delimiter that will terminate building of the token
+        usedelim - determines whether or not delimiters will terminate token building
+    Return:
+        A dynamically allocated token if it is able to be built, or NULL if the token
+        cannot be created for some reason.
+*/
+char * buildToken(const char * str, const char delim, bool usedelim) {
+    if(!str) return NULL;
+    size_t size = 0;
+    size_t capacity = CHUNK_SIZE;
+    char *token = malloc(capacity);
+    /*  If usedlim is set, then we must check that the current character is not the
+        delimiter. If it is not set, then we don't check and continue on (which is
+        the function of the (!usedelim) check) */
+    while(*str && ((usedelim && *str != delim) || (!usedelim)) ) {
+        size++;
+        if(size >= capacity) {
+            capacity += CHUNK_SIZE;
+            token = realloc(token, capacity);
+        }
+        token[size - 1] = *str++;
+    }
+    if(size <= 0) {
+        free(token);
+        return NULL;
+    }
+    token = realloc(token, size + 1);
+    token[size] = '\0';
+    return token;
+}
+
+/*
+    Gets the size of a message sent to the server. Every message always starts with the
+    total size of the message.
+    Parameters:
+        message - the message which contains its size
+    Return:
+        The size of the message
+*/
+long int getMessageSize(const char const * message) {
+    char *sizestr = buildToken(message, DELIMITER, true);
+    long int result = strtol(sizestr, NULL, 10);
+    free(sizestr);
+    return result;
+}
+
+char * performReadOp(const char * message) {
+    printf("Perform Read Op\n");
+    return NULL;
+}
+
+char * performWriteOp(const char * message) {
+    printf("Perform Write Op\n");
+    return NULL;
+}
+
+char * performOpenOp(const char * message) {
+    printf("Perform Open Op\n");
+    return NULL;
+}
+
+char * performCloseOp(const char * message) {
+    printf("Perform Close Op\n");
+    return NULL;
+}
+
+char * performInvalidOp(const char * message) {
+    printf("Perform Invalid Op\n");
+    return NULL;
+}
+
+/*
+    Extracts the necessary information from a client message and calls the appropriate
+    functions to perform the operations on the machine.
+    Parameters:
+        message - the message that will be parsed
+*/
+char * handleClientMessage(const char * message) {
+    if(!message) return NULL; //error
+    //Advance to first delimiter
+    while(*message && *message != DELIMITER) message++;
+    //Advance to character after delimiter
+    message = safeAdvanceCharacters(message, 1);
+    if(!*message) return NULL; //wasn't able to advance two characters before hitting end of string
+    printf("Operation: %c\n", *message);
+    switch(*message) {
+        case OPEN_OP:  return performOpenOp(message);
+        case READ_OP:  return performReadOp(message);
+        case WRITE_OP: return performWriteOp(message);
+        case CLOSE_OP: return performCloseOp(message);
+        default:       return performInvalidOp(message); //invalid operation
+    }
+}
+
 void * clientHandler(void * client) {
     thread_info_t* client_data = (thread_info_t*) client;
     #define clientfd client_data->client_fd
     char buffer[4096] = {0};
+    char *response = NULL;
+    int readbytes = 0;
     while(1) {
-        if(read(clientfd, &buffer, 4095) > 0) {
+        if( (readbytes = read(clientfd, &buffer, 4096)) > 0) {
+            long int expectedsize = getMessageSize(buffer);
             printf("Client (%d) message: %s\n", clientfd, buffer);
-            switch(buffer[0]) {
-                case 'o':{
-                        //do open
-                }
-                case 'r':{
-                        //do read
-                }
-                case 'w':{
-                        //do write
-                }
-           }
+            printf("Read Bytes: %d Expected Bytes: %ld\n", readbytes, expectedsize);
+            response = handleClientMessage(buffer);
+            response = "I got your message";
+            if(write(clientfd, response, strlen(response)) < 0) {
+                //error
+            }
+        } else {
+            //error receiving message from client
         }
-        if(write(clientfd, &buffer, 255)) {
-            printf("Message sent\n");
-        }
-        
     }
 
     #undef clientfd
@@ -67,8 +177,8 @@ static int createSocket() {
 }
 
 /*
-    Binds an existing socket file descriptor to the port defined by the macro PORT. The
-    binding is set up to accept connections to all the IPs of the machine.
+    Binds an existing socket file descriptor to the port defined by the macro PORT.
+    The binding is set up to accept connections to all the IPs of the machine.
     Arguments:
         sockfd - the file descriptor of the socket that will be bound
     Return:
@@ -88,30 +198,13 @@ static int bindSocket(int sockfd) {
     return 0;
 }
 
-/*
-    Accepts a new connection on the socket and returns the new socket file descriptor
-    Arguments:
-        sockfd - the file descriptor of the socket from which the connection will be accepted
-    Return:
-        The file descriptor of the socket which results from the call to accept, -1 otherwise
-*/
-/*static int acceptFromSocket(int sockfd) {
-    struct sockaddr_in cli_addr = {0};
-    socklen_t clilen = sizeof(cli_addr);
-    int newsockfd;
-    if((newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen)) < 0) {
-        errormsg("ERROR on accept", __FILE__, __LINE__);
-    } else {
-        printf("New connection accepted on socket (%d), connection socket is (%d)\n", sockfd, newsockfd);
-    }
-    return newsockfd;
-}*/
-
 int main(void) {
     //Create a socket with the socket() system call
     int sockfd = createSocket();
     //Bind the socket to an address using the bind() system call
-    bindSocket(sockfd);
+    if(bindSocket(sockfd) == -1) {
+        return EXIT_FAILURE; //error binding socket
+    }
     //Listen for connections with the listen() system call
     listen(sockfd, BACKLOG_SIZE);
     pthread_t * threads = malloc(sizeof(pthread_t) * THREAD_LIMIT);
