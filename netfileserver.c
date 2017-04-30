@@ -154,6 +154,8 @@ char * buildOpenResponse(int filefd) {
     char *response = NULL;
     if(filefd == -1) { //error opening file
         char *errno_str = strerror(errno);
+        size_t errno_str_length = strlen(errno_str);
+        size_t message_size = errno_str_length + 2;
     } else {
         if(filefd == 1) {
             filefd == NEG_ONE_FD;
