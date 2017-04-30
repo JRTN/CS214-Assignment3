@@ -151,7 +151,7 @@ char * buildWriteResponse(ssize_t wrotebytes) {
         sprintf(response, "%d!%d!%s", WRITE_RESPONSE_SIZE, -1, errno_str);
         free(errno_str);
     } else {
-
+        sprintf(response, "%d!%zd", WRITE_RESPONSE_SIZE, wrotebytes);
     }
     return response;
 }
