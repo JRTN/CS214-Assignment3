@@ -142,10 +142,11 @@ int parseOpenResponse(){
     int fd = buildToken(buffer, DELIMITER, true);
     if(fd == -1){
         buffer = safeAdvanceCharacters(buffer, 2);
+        return 0;
         
     }
 
-    return performOpenOp(flag, pathname);
+    return fd;
 }
 
 static char *buildReadRequest(int fildes, size_t nbyte) {
@@ -165,8 +166,8 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
         //error
     }
     //read server's response
-    parseReadResponse();
-    return 0;
+    
+    return parseReadResponse();
 }
 
 ssize_t parseReadResponse(){
