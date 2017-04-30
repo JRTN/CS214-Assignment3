@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
+#include <netdb.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -52,6 +53,22 @@ char * intToStr(const int num) {
     int ret = snprintf(result, MAX_INT_LENGTH, "%d", num);
     result = realloc(result, ret + 1);
     return result;
+}
+
+char * errnoToCode() {
+    switch(errno) {
+        case EACCES:          return strdup("EACCES");
+        case EINTR:           return strdup("EINTR");
+        case EISDIR:          return strdup("EISDIR");
+        case ENOENT:          return strdup("ENOENT");
+        case ENFILE:          return strdup("ENFILE");
+        case EWOULDBLOCK:     return strdup("EWOULDBLOCK");
+        case ETIMEDOUT:       return strdup("ETIMEDOUT");
+        case EBADF:           return strdup("EBADF");
+        case ECONNRESET:      return strdup("ECONNRESET");
+        case HOST_NOT_FOUND:  return strdup("HOST_NOT_FOUND");
+        default: return NULL;
+    }
 }
 
 /*
@@ -126,6 +143,19 @@ char * parseReadMessage(const char *message) {
     return performReadOp(nbyte, filedes);
 }
 
+#define WRITE_RESPONSE_SIZE 30
+char * buildWriteResponse(ssize_t wrotebytes) {
+    char *response = malloc(WRITE_RESPONSE_SIZE);
+    if(wrotebytes == -1) { //error writing to file
+        char *errno_str = errnoToCode();
+        sprintf(response, "%d!%d!%s", WRITE_RESPONSE_SIZE, -1, errno_str);
+        free(errno_str);
+    } else {
+
+    }
+    return response;
+}
+
 char * performWriteOp(const char *filedes, const char *nbyte, const char *buffer) {
     printf("Perform Write Op:\n");
     printf("filedes: %s\n", filedes);
@@ -133,9 +163,15 @@ char * performWriteOp(const char *filedes, const char *nbyte, const char *buffer
     printf("buffer: %s\n", buffer);
 
     int n_nbyte = strtol(nbyte, NULL, 10);
-    int n_filedes = strtol(filedes, NULL, 10);
+    int n_filedes = -strtol(filedes, NULL, 10); //negate network file descriptor to get actual file descriptor
+    if(n_filedes == NEG_ONE_FD) {
+        n_filedes = 1;
+    }
 
-    return NULL;
+    ssize_t wrotebytes = write(n_filedes, (const void *)buffer, n_nbyte);
+    
+
+    return buildWriteResponse(wrotebytes);
 }
 
 char * parseWriteMessage(const char *message) {
@@ -150,20 +186,21 @@ char * parseWriteMessage(const char *message) {
     return performWriteOp(filedes, nbyte, buffer);
 }
 
-#define START_SIZE 100
+#define OPEN_RESPONSE_SIZE 30
 
 char * buildOpenResponse(int filefd) {
-    char *response = NULL;
+    char *response = malloc(OPEN_RESPONSE_SIZE);
     if(filefd == -1) { //error opening file
         //get readable version of errno error code
-        char *errno_str = strerror(errno);
+        char *errno_str = errnoToCode();
         //find length of readable error
-        response = strdup("Error\n");
+        sprintf(response, "%d!%d!%s", OPEN_RESPONSE_SIZE, filefd, errno_str);
+        free(errno_str);
     } else {
         if(filefd == 1) {
             filefd = NEG_ONE_FD;
         }
-        response = strdup("Open message read");
+        sprintf(response, "%d!%d", OPEN_RESPONSE_SIZE, -filefd);
     }
     return response;
 }
@@ -201,13 +238,16 @@ char * parseOpenMessage(const char *message) {
     return performOpenOp(flag, pathname);
 }
 
+#define CLOSE_RESPONSE_SIZE 30
+
 char * buildCloseResponse(int close_result) {
-    char *response = NULL;
+    char *response = malloc(CLOSE_RESPONSE_SIZE);
     if(close_result == 0) { //closed successfully
-        //4!0'\0'
-        response = strdup("4!0");
+        sprintf(response, "%d!%d", CLOSE_RESPONSE_SIZE, close_result);
     } else { //error closing
-        response = strdup("12!-1!EBADF");
+        char *errno_str = errnoToCode(errno);
+        sprintf(response, "%d!%d!%s", CLOSE_RESPONSE_SIZE, close_result, errno_str);
+        free(errno_str);
     }
     return response;
 }
