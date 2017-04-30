@@ -3,7 +3,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -20,6 +24,12 @@
 #define WRITE_OP 'w'
 #define OPEN_OP 'o'
 #define CLOSE_OP 'c'
+
+#define OUR_O_RDONLY 1
+#define OUR_O_WRONLY 2
+#define OUR_O_RDWR   3
+
+#define NEG_ONE_FD 100000
 
 typedef struct thread_info_t{
     int client_fd;
@@ -101,6 +111,9 @@ char * performReadOp(const char *nbyte, const char *filedes) {
     printf("nbyte: %s\n", nbyte);
     printf("filedes: %s\n", filedes);
 
+    int n_nbyte = strtol(nbyte, NULL, 10);
+    int n_filedes = strtol(filedes, NULL, 10);
+
     return NULL;
 }
 
@@ -119,6 +132,9 @@ char * performWriteOp(const char *filedes, const char *nbyte, const char *buffer
     printf("nbyte: %s\n", nbyte);
     printf("buffer: %s\n", buffer);
 
+    int n_nbyte = strtol(nbyte, NULL, 10);
+    int n_filedes = strtol(filedes, NULL, 10);
+
     return NULL;
 }
 
@@ -134,26 +150,77 @@ char * parseWriteMessage(const char *message) {
     return performWriteOp(filedes, nbyte, buffer);
 }
 
+char * buildOpenResponse(int filefd) {
+    char *response = NULL;
+    if(filefd == -1) { //error opening file
+        char *errno_str = strerror(errno);
+    } else {
+        if(filefd == 1) {
+            filefd == NEG_ONE_FD;
+        }
+    }
+    return response;
+}
+
 char * performOpenOp(int flag, const char *pathname) {
     printf("Perform Open Op:\n");
     printf("Flag: %d\n", flag);
     printf("Pathname: %s\n", pathname);
-    return NULL;
+
+    switch(flag) {
+        case OUR_O_RDONLY:
+            flag = O_RDONLY;
+        break;
+        case OUR_O_WRONLY:
+            flag = O_WRONLY;
+        break;
+        case OUR_O_RDWR:
+            flag = O_RDWR;
+        break;
+    }
+    
+    int filefd = open(pathname, flag);
+    
+    return buildOpenResponse(filefd);
 }
 
 char * parseOpenMessage(const char *message) {
     int flag = *message - '0';
     message = safeAdvanceCharacters(message, 2);
+    if(!*message) {
+        //error, hit end of string before finding pathname
+    }
     char *pathname = buildToken(message, DELIMITER, false);
 
     return performOpenOp(flag, pathname);
+}
+
+char * buildCloseResponse(int close_result) {
+    char *response = NULL;
+    if(close_result == 0) { //closed successfully
+        //4!0'\0'
+        response = strdup("4!0");
+    } else { //error closing
+        response = strdup("12!-1!EBADF");
+    }
+    return response;
 }
 
 char * performCloseOp(const char *filedes) {
     printf("Perform Close Op:\n");
     printf("filedes: %s\n", filedes);
 
-    return NULL;
+    int n_filedes = strtol(filedes, NULL, 10);
+
+    if(n_filedes == NEG_ONE_FD) {
+        n_filedes = 1;
+    } else {
+        n_filedes = -n_filedes;
+    }
+
+    int result = close(n_filedes);
+
+    return buildCloseResponse(result);
 }
 
 char * parseCloseMessage(const char *message) {
@@ -205,7 +272,7 @@ void * clientHandler(void * client) {
             printf("Client (%d) message: %s\n", clientfd, buffer);
             printf("Read Bytes: %d Expected Bytes: %ld\n", readbytes, expectedsize);
             response = handleClientMessage(buffer);
-            response = "I got your message";
+            //response = "I got your message";
             if(write(clientfd, response, strlen(response)) < 0) {
                 //error
             }
