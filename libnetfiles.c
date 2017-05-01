@@ -41,6 +41,7 @@ int netopen(const char *pathname, int flags) {
     printf("message: %s\n",orequest);
     packet *reqpkt = packetCreate(orequest, strlen(orequest) + 1);
     int sendres = sendPacket(sockfd, reqpkt);
+    packetDestroy(reqpkt);
     if(sendres < 1) {
         return -1; //error sending packet
     }
@@ -48,7 +49,9 @@ int netopen(const char *pathname, int flags) {
     if(!respkt) {
         return -1; //error reading packet
     }
-    return parseOpenResponse(respkt->data);
+    int result = parseOpenResponse(respkt->data);
+    packetDestroy(respkt);
+    return result;
 }
 
 static char *buildReadRequest(int fildes, size_t nbyte) {
@@ -73,6 +76,7 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
 
     packet *reqpkt = packetCreate(rrequest, strlen(rrequest) + 1);
     int sendres = sendPacket(sockfd, reqpkt);
+    packetDestroy(reqpkt);
     if(sendres < 1) {
         return -1;
     }
@@ -80,8 +84,9 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
     if(!respkt) {
         return -1;
     }
-
-    return parseReadResponse(respkt->data, buf);
+    ssize_t result = parseReadResponse(respkt->data, buf);
+    packetDestroy(respkt);
+    return result;
 }
 
 
@@ -107,6 +112,7 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
     char *request = buildWriteRequest(fildes, buf, nbyte);
     packet *reqpkt = packetCreate(request, strlen(request) + 1);
     int sendres = sendPacket(sockfd, reqpkt);
+    packetDestroy(reqpkt);
     if(sendres < 1) {
         return -1;
     }
@@ -114,10 +120,10 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
     if(!respkt) {
         return -1;
     }
-    return parseWriteResponse(respkt->data);
+    ssize_t result = parseWriteResponse(respkt->data);
+    packetDestroy(respkt);
+    return result;
 }
-
-
 
 static char *buildCloseRequest(int fildes){
     printf("file descriptor %d\n", fildes);
@@ -140,6 +146,7 @@ int netclose(int fd) {
     char *request = buildCloseRequest(fd);
     packet *reqpkt = packetCreate(request, strlen(request) + 1);
     int sendres = sendPacket(sockfd, reqpkt);
+    packetDestroy(reqpkt);
     if(sendres < 1) {
         return -1;
     }
@@ -147,7 +154,9 @@ int netclose(int fd) {
     if(!respkt) {
         return -1;
     }
-    return parseCloseResponse(respkt->data);
+    int result = parseCloseResponse(respkt->data);
+    packetDestroy(respkt);
+    return result;
 }
 
 int netserverinit(char *hostname) {

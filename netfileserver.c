@@ -23,13 +23,11 @@ int getActualFileDes(int fildes) {
 
 /*
     Builds and returns the response containing the results of a read operation that will
-    be sent back to the client. Read responses will always at least be the size that is
-    defined in READ_RESPONSE_BASE_SIZE, but they also may be larger depending on the
-    size of the buffer which contains the data that was read.
+    be sent back to the client.
     Responses are of the form:
-        <size>!<nbyte>!<buffer> 
+        <nbyte>!<buffer> 
     when there are no errors during the file operation, or
-        <size>!-1!<error>
+        -1!<error>
     when there is an error during the file operation
     Parameters:
         readbytes - the number of bytes that were read in the file operation
@@ -101,13 +99,11 @@ char * parseReadMessage(const char *message) {
 }
 
 /*
-    Builds and returns the response containing the results of a write file operation.
-    Write responses will always be the size defined by WRITE_RESPONSE_SIZE, even though
-    the actual information contained within may not need all bytes to be represented.
+    Builds and returns the response containing the results of a write file operation
     Write responses are of the following form:
-        <size>!<nbytes>
+        <nbytes>
     if there are no errors during the write file operation, or
-        <size>!-1!<error>
+        -1!<error>
     if there is an error during the write file operation.
     Parameters:
         wrotebytes - the number of bytes written during the file operation
@@ -176,12 +172,10 @@ char * parseWriteMessage(const char *message) {
 
 /*
     Builds and returns the response containing the results of an open file operation.
-    Open responses will always be the size defined by OPEN_RESPONSE_SIZE, even though
-    the actual information contained within may not need all bytes to be represented.
     open responses are of the following form:
-        <size>!<filedes>
+        <filedes>
     if there are no errors during the open file operation, or
-        <size>!-1!<error>
+        -1!<error>
     if there is an error during the open file operation.
     Parameters:
         filefd - the file descriptor returned from the call to open()
@@ -328,8 +322,8 @@ char * handleClientMessage(const char *message) {
 }
 
 void * clientHandler(void * client) {
-    thread_info_t* client_data = (thread_info_t*) client;
-    #define clientfd client_data->client_fd
+    int clientfd = *(int*)client;
+    free(client);
     char *response = NULL;
     while(1) {
         packet *clientpkt = NULL;
@@ -354,7 +348,6 @@ void * clientHandler(void * client) {
         }
     }
     close(clientfd);
-    #undef clientfd
     return 0;
 }
 
@@ -404,24 +397,23 @@ int main(void) {
     }
     //Listen for connections with the listen() system call
     listen(sockfd, BACKLOG_SIZE);
-    pthread_t * threads = malloc(sizeof(pthread_t) * THREAD_LIMIT);
-    thread_info_t * thread_info = malloc(sizeof(thread_info_t) * THREAD_LIMIT);
-    int client_count = -1;
     //Accept a connection with the accept() system call
     while(1) {
-        client_count++;
-        thread_info[client_count].client_fd = accept(sockfd, (struct sockaddr*) &(thread_info[client_count].client_addr),
-                                                     &thread_info[client_count].client_addr_len);
-        if(thread_info[client_count].client_fd < 0) {
+        struct sockaddr_in client_addr = {0};
+        socklen_t client_len;
+        int newsocket_fd = accept(sockfd, (struct sockaddr *) &client_addr, &client_len);
+        if(newsocket_fd < 0) {
+            printf("Error on accept\n");
             return 0;
         } else {
             printf("Connection accepted on socket (%d)\n", sockfd);
-            printf("Client socket fd: %d\n", thread_info[client_count].client_fd);
+            printf("Client socket fd: %d\n", newsocket_fd);
         }
-        int ptc = pthread_create(&threads[client_count], NULL, clientHandler, (void*) &thread_info[client_count]);
-        if(ptc < 0) {
-            //error
-        }
+        pthread_t thread;
+        int *newsock = malloc(sizeof(int));
+        *newsock = newsocket_fd;
+        pthread_create(&thread, NULL, clientHandler, newsock);
+        pthread_detach(thread);
     }
     return 0; 
 }
