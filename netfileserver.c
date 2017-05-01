@@ -71,6 +71,14 @@ char * errnoToCode() {
     }
 }
 
+int getActualFileDes(int fildes) {
+    if(fildes == NEG_ONE_FD) {
+        return 1;
+    } else {
+        return -fildes;
+    }
+}
+
 /*
     Builds a token from the given string until the specified delimiter is encountered
     or the end of the string is reached, depending on how usedelim is set. Memory for
@@ -123,6 +131,47 @@ long int getMessageSize(const char const *message) {
     return result;
 }
 
+/*
+    Builds and returns the response containing the results of a read operation that will
+    be sent back to the client. Read responses will always at least be the size that is
+    defined in READ_RESPONSE_BASE_SIZE, but they also may be larger depending on the
+    size of the buffer which contains the data that was read.
+    Responses are of the form:
+        <size>!<nbyte>!<buffer> 
+    when there are no errors during the file operation, or
+        <size>!-1!<error>
+    when there is an error during the file operation
+    Parameters:
+        readbytes - the number of bytes that were read in the file operation
+        buffer - the actual data that was read during the file operation
+    Return:
+        A formatted response that is to be sent to the client and interpreted client side
+*/
+#define READ_RESPONSE_BASE_SIZE 30
+char * buildReadResponse(ssize_t readbytes, char *buffer) {
+    char * response = NULL;
+    if(readbytes == -1) { //error reading
+        response = malloc(READ_RESPONSE_BASE_SIZE);
+        char *errno_str = errnoToCode();
+        sprintf(response, "%d!%zd!%s", READ_RESPONSE_BASE_SIZE, readbytes, errno_str);
+        free(errno_str);
+    } else {
+        size_t messagesize = readbytes + READ_RESPONSE_BASE_SIZE + 1;
+        response = malloc(messagesize);
+        sprintf(response, "%zd!%zd!%s", messagesize, readbytes, buffer);
+    }
+    return response;
+}
+
+/*
+    Performs a read file operation with the given parameters and passes the results to a
+    function which formats these results to be sent back to the client. 
+    Parameters:
+        nbyte - A string representation of the number of bytes to be read
+        filedes - A string representation of the file descriptor of the file to be read
+    Return:
+        A response as formatted in buildReadResponse()
+*/
 char * performReadOp(const char *nbyte, const char *filedes) {
     printf("Perform Read Op:\n");
     printf("nbyte: %s\n", nbyte);
@@ -130,10 +179,24 @@ char * performReadOp(const char *nbyte, const char *filedes) {
 
     int n_nbyte = strtol(nbyte, NULL, 10);
     int n_filedes = strtol(filedes, NULL, 10);
+    int actualFileDes = getActualFileDes(n_filedes);
 
-    return NULL;
+    char *buffer = malloc(n_nbyte + 1);
+    buffer[n_nbyte] = '\0';
+
+    ssize_t readbytes = read(actualFileDes, buffer, (size_t)n_nbyte);
+
+    return buildReadResponse(readbytes, buffer);
 }
 
+/*
+    Takes a client read message and parses the relevant information which is then passed
+    to the performReadOp() function.
+    Parameters:
+        message - the client message containing the needed information
+    Return:
+        A response as formatted in buildReadResponse()
+*/
 char * parseReadMessage(const char *message) {
     char *nbyte = buildToken(message, DELIMITER, true);
     size_t adv = strlen(nbyte) + 1;
@@ -143,6 +206,20 @@ char * parseReadMessage(const char *message) {
     return performReadOp(nbyte, filedes);
 }
 
+/*
+    Builds and returns the response containing the results of a write file operation.
+    Write responses will always be the size defined by WRITE_RESPONSE_SIZE, even though
+    the actual information contained within may not need all bytes to be represented.
+    Write responses are of the following form:
+        <size>!<nbytes>
+    if there are no errors during the write file operation, or
+        <size>!-1!<error>
+    if there is an error during the write file operation.
+    Parameters:
+        wrotebytes - the number of bytes written during the file operation
+    Return:
+        A formatted response that is to be sent to the client and interpreted client-side
+*/
 #define WRITE_RESPONSE_SIZE 30
 char * buildWriteResponse(ssize_t wrotebytes) {
     char *response = malloc(WRITE_RESPONSE_SIZE);
@@ -156,6 +233,16 @@ char * buildWriteResponse(ssize_t wrotebytes) {
     return response;
 }
 
+/*
+    Performs a write file operation with the given parameters and passes the results to
+    a function to be formatted for sending to the client.
+    Parameters:
+        filedes - string representation of the file to be written to
+        nbyte - string representation of the numer of bytes to be written
+        buffer - the bytes to be written
+    Return:
+        A formatted response as defined in buildWriteResponse()
+*/
 char * performWriteOp(const char *filedes, const char *nbyte, const char *buffer) {
     printf("Perform Write Op:\n");
     printf("filedes: %s\n", filedes);
@@ -163,17 +250,21 @@ char * performWriteOp(const char *filedes, const char *nbyte, const char *buffer
     printf("buffer: %s\n", buffer);
 
     int n_nbyte = strtol(nbyte, NULL, 10);
-    int n_filedes = -strtol(filedes, NULL, 10); //negate network file descriptor to get actual file descriptor
-    if(n_filedes == NEG_ONE_FD) {
-        n_filedes = 1;
-    }
-
-    ssize_t wrotebytes = write(n_filedes, (const void *)buffer, n_nbyte);
+    int n_filedes = strtol(filedes, NULL, 10);
+    int actualFileDes = getActualFileDes(n_filedes);
+    ssize_t wrotebytes = write(actualFileDes, (const void *)buffer, n_nbyte);
     
-
     return buildWriteResponse(wrotebytes);
 }
 
+/*
+    Parses a client message for the information that is then sent to the performWriteOp()
+    function.
+    Parameters:
+        message - the client message containing information for the file operation
+    Return:
+        A formatted response as defined in buildWriteResponse()
+*/
 char * parseWriteMessage(const char *message) {
     char *filedes = buildToken(message, DELIMITER, true);
     size_t adv = strlen(filedes) + 1;
@@ -186,8 +277,21 @@ char * parseWriteMessage(const char *message) {
     return performWriteOp(filedes, nbyte, buffer);
 }
 
+/*
+    Builds and returns the response containing the results of an open file operation.
+    Open responses will always be the size defined by OPEN_RESPONSE_SIZE, even though
+    the actual information contained within may not need all bytes to be represented.
+    open responses are of the following form:
+        <size>!<filedes>
+    if there are no errors during the open file operation, or
+        <size>!-1!<error>
+    if there is an error during the open file operation.
+    Parameters:
+        filefd - the file descriptor returned from the call to open()
+    Return:
+        A formatted response that is to be sent to the client and interpreted client-side
+*/
 #define OPEN_RESPONSE_SIZE 30
-
 char * buildOpenResponse(int filefd) {
     char *response = malloc(OPEN_RESPONSE_SIZE);
     if(filefd == -1) { //error opening file
@@ -205,6 +309,15 @@ char * buildOpenResponse(int filefd) {
     return response;
 }
 
+/*
+    Performs an open file operation with the given parameters and passes the results to
+    a function to be formatted for sending to the client.
+    Parameters:
+        flag - a flag indicating how the file is to be opened
+        pathname - the pathname of the file to be opened
+    Return:
+        A formatted response as defined in buildOpenResponse()
+*/
 char * performOpenOp(int flag, const char *pathname) {
     printf("Perform Open Op:\n");
     printf("Flag: %d\n", flag);
@@ -223,10 +336,20 @@ char * performOpenOp(int flag, const char *pathname) {
     }
     
     int filefd = open(pathname, flag);
+    printf("filefd: %d\n", filefd);
+    printf("flag: 0x%x\n", flag);
     
     return buildOpenResponse(filefd);
 }
 
+/*
+    Parses a client message for the information that is then sent to the performOpenOp()
+    function.
+    Parameters:
+        message - the client message containing information for the file operation
+    Return:
+        A formatted response as defined in buildOpenResponse()
+*/
 char * parseOpenMessage(const char *message) {
     int flag = *message - '0';
     message = safeAdvanceCharacters(message, 2);
@@ -238,8 +361,21 @@ char * parseOpenMessage(const char *message) {
     return performOpenOp(flag, pathname);
 }
 
+/*
+    Builds and returns the response containing the results of a close file operation.
+    close responses will always be the size defined by CLOSE_RESPONSE_SIZE, even though
+    the actual information contained within may not need all bytes to be represented.
+    close responses are of the following form:
+        <size>!0
+    if there are no errors during the close file operation, or
+        <size>!-1!<error>
+    if there is an error during the close file operation.
+    Parameters:
+        close_result - the value returned from the call to close()
+    Return:
+        A formatted response that is to be sent to the client and interpreted client-side
+*/
 #define CLOSE_RESPONSE_SIZE 30
-
 char * buildCloseResponse(int close_result) {
     char *response = malloc(CLOSE_RESPONSE_SIZE);
     if(close_result == 0) { //closed successfully
@@ -252,20 +388,20 @@ char * buildCloseResponse(int close_result) {
     return response;
 }
 
+/*
+    Performs a close file operation with the given parameters and passes the results to
+    a function to be formatted for sending to the client.
+    Parameters:
+        filedes - string representation of the file descriptor of the file that will be closed
+    Return:
+        A formatted response as defined in buildCloseResponse()
+*/
 char * performCloseOp(const char *filedes) {
     printf("Perform Close Op:\n");
     printf("filedes: %s\n", filedes);
-
     int n_filedes = strtol(filedes, NULL, 10);
-
-    if(n_filedes == NEG_ONE_FD) {
-        n_filedes = 1;
-    } else {
-        n_filedes = -n_filedes;
-    }
-
-    int result = close(n_filedes);
-
+    int actualFileDes = getActualFileDes(n_filedes);
+    int result = close(actualFileDes);
     return buildCloseResponse(result);
 }
 
