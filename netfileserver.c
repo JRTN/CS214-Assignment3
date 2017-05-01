@@ -150,7 +150,7 @@ long int getMessageSize(const char const *message) {
 #define READ_RESPONSE_BASE_SIZE 30
 char * buildReadResponse(ssize_t readbytes, char *buffer) {
     char * response = NULL;
-    if(readbytes == -1) { //error reading
+    if(readbytes == -1) { //error readingq
         response = malloc(READ_RESPONSE_BASE_SIZE);
         char *errno_str = errnoToCode();
         sprintf(response, "%d!%zd!%s", READ_RESPONSE_BASE_SIZE, readbytes, errno_str);
@@ -426,19 +426,19 @@ char * handleClientMessage(const char *message) {
     if(!message) return NULL; //error
     //Advance to first delimiter
     while(*message && *message != DELIMITER) message++;
-    //Advance to character after delimiter
-    message = safeAdvanceCharacters(message, 1);
-    if(!*message) return NULL; //wasn't able to advance two characters before hitting end of string
-    printf("Operation: %c\n", *message);
-    char operation = *message;
-    //Advance to start of unique messages
-    message = safeAdvanceCharacters(message, 2);
-    switch(operation) {
-        case OPEN_OP:  return parseOpenMessage(message);
-        case READ_OP:  return parseReadMessage(message);
-        case WRITE_OP: return parseWriteMessage(message);
-        case CLOSE_OP: return parseCloseMessage(message);
-        default:       return performInvalidOp(message); //invalid operation
+        //Advance to character after delimiter
+        message = safeAdvanceCharacters(message, 1);
+        if(!*message) return NULL; //wasn't able to advance two characters before hitting end of string
+        printf("Operation: %c\n", *message);
+        char operation = *message;
+        //Advance to start of unique messages
+        message = safeAdvanceCharacters(message, 2);
+        switch(operation) {
+            case OPEN_OP:  return parseOpenMessage(message);
+            case READ_OP:  return parseReadMessage(message);
+            case WRITE_OP: return parseWriteMessage(message);
+            case CLOSE_OP: return parseCloseMessage(message);
+            default:       return performInvalidOp(message); //invalid operation
     }
 }
 
