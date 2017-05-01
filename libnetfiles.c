@@ -101,7 +101,6 @@ int numPlaces (int n) {
 }
 
 static int sendMessageToSocket(const char const *message) {
-    printf("file descriptor %d\n", fildes);
     int wrotebits = 0;
     if((wrotebits = write(sockfd, message, strlen(message))) < 0) {
         errormsg("ERROR writing to socket", __FILE__, __LINE__);
@@ -111,7 +110,6 @@ static int sendMessageToSocket(const char const *message) {
 }
 
 static void printSocketResponse() {
-    printf("file descriptor %d\n", fildes);
     char buffer[256] = {0};
     int readbits = 0;
     if((readbits = read(sockfd, buffer, 255)) < 0) {
@@ -122,7 +120,8 @@ static void printSocketResponse() {
 
 static char *buildOpenRequest(const char *pathname, int flags) {
     size_t pathlen = strlen(pathname);
-    int messageSize = pathlen + 10;
+    int messageSize = pathlen + 5;
+    messageSize = messageSize + strlen(intToStr(messageSize));
     char *omessage = malloc(messageSize);
     sprintf(omessage, "%d!o!%d!%s",messageSize, flags, pathname);
     return omessage;
@@ -150,7 +149,6 @@ int parseOpenResponse(){
 }
 
 int netopen(const char *pathname, int flags) {
-    printf("file descriptor %d\n", fildes);
     char *orequest = buildOpenRequest(pathname, flags);
     printf("%s\n",orequest);
     //send request to server
@@ -199,6 +197,7 @@ ssize_t parseReadResponse(char* buf){
 ssize_t netread(int fildes, void *buf, size_t nbyte) {
     printf("file descriptor %d\n", fildes);
     char *rrequest = buildReadRequest(fildes, nbyte);
+    printf("%s\n",rrequest );
     int wrotebits = sendMessageToSocket(rrequest);
     free(rrequest);
     if(wrotebits < 0) {
@@ -242,6 +241,7 @@ ssize_t parseWriteResponse(){
 ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
     printf("file descriptor %d\n", fildes);
     char *wrequest = buildWriteRequest(fildes, buf, nbyte);
+    printf("%s\n",wrequest);
     int wrotebits = sendMessageToSocket(wrequest);
     free(wrequest);
     if(wrotebits < 0) {
@@ -269,6 +269,7 @@ static char *buildCloseRequest(int fildes){
 int netclose(int fd) {
     char *crequest = buildCloseRequest(fd);
     //send request to server
+    printf("%s\n",crequest);
     int wrotebits = sendMessageToSocket(crequest);
     free(crequest);
     if(wrotebits < 0) {
