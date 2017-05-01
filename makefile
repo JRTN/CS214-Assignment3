@@ -5,8 +5,11 @@ OBJS=libnetfiles.o
 libnetfiles.o: libnetfiles.c libnetfiles.h
 	$(CC) $(CFLAGS) -c libnetfiles.c
 
-netfileserver: netfileserver.c netfileserver.h
-	$(CC) $(CFLAGS) -pthread -o $@ netfileserver.c
+utils.o: utils.c utils.h
+	$(CC) $(CFLAGS) -c utils.c
+
+netfileserver: netfileserver.c netfileserver.h utils.o
+	$(CC) $(CFLAGS) -pthread -o $@ netfileserver.c utils.o
 
 testclient: testclient.c
 	$(CC) -o $@ testclient.c
