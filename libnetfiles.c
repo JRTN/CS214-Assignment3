@@ -16,7 +16,7 @@
 #define CHUNK_SIZE 5
 
 static int sockfd = -1;
-
+/*
 char * errnoToCode() {
     switch(errno) {
         case EACCES:          return strdup("EACCES");
@@ -32,25 +32,7 @@ char * errnoToCode() {
         default: return NULL;
     }
 }
-
-void errormsg(const char const * msg, const char const *file, const int line) {
-    fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
-}
-
-long int getMessageSize(const char const *message) {
-    char *sizestr = buildToken(message, DELIMITER, true);
-    long int result = strtol(sizestr, NULL, 10);
-    free(sizestr);
-    return result;
-}
-
-
-char * intToStr(const int num) {
-    char *result = malloc(MAX_INT_LENGTH);
-    int ret = snprintf(result, MAX_INT_LENGTH, "%d", num);
-    result = realloc(result, ret + 1);
-    return result;
-}
+*/
 
 char * buildToken(const char *str, const char delim, bool usedelim) {
     if(!str) return NULL;
@@ -76,6 +58,25 @@ char * buildToken(const char *str, const char delim, bool usedelim) {
     token[size] = '\0';
     return token;
 }
+void errormsg(const char const * msg, const char const *file, const int line) {
+    fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
+}
+
+long int getMessageSize(const char const *message) {
+    char *sizestr = buildToken(message, DELIMITER, true);
+    long int result = strtol(sizestr, NULL, 10);
+    free(sizestr);
+    return result;
+}
+
+
+char * intToStr(const int num) {
+    char *result = malloc(MAX_INT_LENGTH);
+    int ret = snprintf(result, MAX_INT_LENGTH, "%d", num);
+    result = realloc(result, ret + 1);
+    return result;
+}
+
 
 char * safeAdvanceCharacters(const char *str, const size_t amt) {
     int i;
@@ -144,7 +145,7 @@ int netopen(const char *pathname, int flags) {
 }
 
 int parseOpenResponse(){
-    char buffer[256] = {0};
+    char* buffer = {0};
     int readbits = 0;
     if((readbits = read(sockfd, buffer, 255)) < 0) {
         errormsg("Error reading socket response", __FILE__, __LINE__);
@@ -171,21 +172,7 @@ static char *buildReadRequest(int fildes, size_t nbyte) {
     sprintf(rrequest, "%d!r!%zu!%d",messageSize,nbyte,fildes);
     return rrequest;
 }
-
-ssize_t netread(int fildes, void *buf, size_t nbyte) {
-    printf("socket %d\n", sockfd);
-    char *rrequest = buildReadRequest(fildes, nbyte);
-    int wrotebits = sendMessageToSocket(rrequest);
-    free(rrequest);
-    if(wrotebits < 0) {
-        //error
-    }
-    //read server's response
-
-    return parseReadResponse(buf);
-}
-
-ssize_t parseReadResponse(void* buf){
+ssize_t parseReadResponse(char* buf){
   //char buffer[256] = {0};
   int readbits = 0;
   if((readbits = read(sockfd, buf, 255)) < 0) {
@@ -207,6 +194,21 @@ ssize_t parseReadResponse(void* buf){
   return nbyte;
 }
 
+ssize_t netread(int fildes, void *buf, size_t nbyte) {
+    printf("socket %d\n", sockfd);
+    char *rrequest = buildReadRequest(fildes, nbyte);
+    int wrotebits = sendMessageToSocket(rrequest);
+    free(rrequest);
+    if(wrotebits < 0) {
+        //error
+    }
+    //read server's response
+
+    return parseReadResponse((char*)buf);
+}
+
+
+
 static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
     printf("socket %d\n", sockfd);
     char nullTermBuf[nbyte+1];
@@ -217,6 +219,22 @@ static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
     messageSize = messageSize + strlen(intToStr(messageSize));
     sprintf(wrequest, "%d!w!%d!%zu!%s",messageSize,fildes,nbyte,nullTermBuf);
     return wrequest;
+}
+
+ssize_t parseWriteResponse(){
+  char* buffer = {0};
+  int readbits = 0;
+  if((readbits = read(sockfd, buffer, 255)) < 0) {
+      errormsg("Error reading socket response", __FILE__, __LINE__);
+  }
+  int size = getMessageSize(buffer);
+  buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
+  if(!*buffer) {
+      //error, hit end of string before finding pathname
+  }
+  int nbyte = buildToken(buffer, DELIMITER, true);
+  printf("%s\n",intToStr(nbyte));
+  return nbyte;
 }
 
 ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
@@ -234,21 +252,7 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
     return 0;
 }
 
-ssize_t parseWriteResponse(){
-  char buffer[256] = {0};
-  int readbits = 0;
-  if((readbits = read(sockfd, buffer, 255)) < 0) {
-      errormsg("Error reading socket response", __FILE__, __LINE__);
-  }
-  int size = getMessageSize(buffer);
-  buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
-  if(!*buffer) {
-      //error, hit end of string before finding pathname
-  }
-  int nbyte = buildToken(buf, DELIMITER, true);
-  printf("%s\n",intToStr(nbyte));
-  return nbyte;
-}
+
 
 static char *buildCloseRequest(int fildes){
     printf("socket %d\n", sockfd);
@@ -274,7 +278,7 @@ int netclose(int fd) {
 }
 
 int parseCloseResponse(){
-    char buffer[256] = {0};
+    char* buffer = {0};
     int readbits = 0;
     if((readbits = read(sockfd, buffer, 255)) < 0) {
       errormsg("Error reading socket response", __FILE__, __LINE__);
@@ -284,10 +288,10 @@ int parseCloseResponse(){
     if(!*buffer) {
         //error, hit end of string before finding pathname
     }
-    int num = buildToken(buf, DELIMITER, true);
+    int num = buildToken(buffer, DELIMITER, true);
     if(num == -1){
       buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
-      char* error = buildToken(buffer);
+      char* error = buildToken(buffer,DELIMITER,true);
     }
 
 }

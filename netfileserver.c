@@ -137,7 +137,7 @@ long int getMessageSize(const char const *message) {
     defined in READ_RESPONSE_BASE_SIZE, but they also may be larger depending on the
     size of the buffer which contains the data that was read.
     Responses are of the form:
-        <size>!<nbyte>!<buffer> 
+        <size>!<nbyte>!<buffer>
     when there are no errors during the file operation, or
         <size>!-1!<error>
     when there is an error during the file operation
@@ -165,7 +165,7 @@ char * buildReadResponse(ssize_t readbytes, char *buffer) {
 
 /*
     Performs a read file operation with the given parameters and passes the results to a
-    function which formats these results to be sent back to the client. 
+    function which formats these results to be sent back to the client.
     Parameters:
         nbyte - A string representation of the number of bytes to be read
         filedes - A string representation of the file descriptor of the file to be read
@@ -253,7 +253,7 @@ char * performWriteOp(const char *filedes, const char *nbyte, const char *buffer
     int n_filedes = strtol(filedes, NULL, 10);
     int actualFileDes = getActualFileDes(n_filedes);
     ssize_t wrotebytes = write(actualFileDes, (const void *)buffer, n_nbyte);
-    
+
     return buildWriteResponse(wrotebytes);
 }
 
@@ -334,11 +334,11 @@ char * performOpenOp(int flag, const char *pathname) {
             flag = O_RDWR;
         break;
     }
-    
+
     int filefd = open(pathname, flag);
     printf("filefd: %d\n", filefd);
     printf("flag: 0x%x\n", flag);
-    
+
     return buildOpenResponse(filefd);
 }
 
@@ -532,5 +532,5 @@ int main(void) {
             //error
         }
     }
-    return 0; 
+    return 0;
 }
