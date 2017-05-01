@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS= -g -Wall
-OBJS=libnetfiles.o
+OBJS=libnetfiles.o utils.o
 
 libnetfiles.o: libnetfiles.c libnetfiles.h
 	$(CC) $(CFLAGS) -c libnetfiles.c
