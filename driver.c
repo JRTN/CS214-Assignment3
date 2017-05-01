@@ -1,6 +1,10 @@
 #include "libnetfiles.h"
 
 #include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+
+#define TESTF1 "test.txt"
 
 int main(int argc, char **argv) {
     if(argc < 2) {
@@ -12,10 +16,17 @@ int main(int argc, char **argv) {
     if(check == -1){
         return -1;
     }
-    int filed = netopen("/Documents/SysPrg/CS214-Assignment3/hi.txt", 0);
+    int filed = netopen(TESTF1, 0);
     printf("file descriptor: %d\n", filed);
-    //char buffer[256] = {0};
-    netclose(filed);
+    if(filed == -1) {
+        printf("Errno: %d\n", errno);
+    }
+    char buffer[6] = {0};
+    ssize_t readres = netread(filed, buffer, 5);
+    printf("readbytes: %zd\n", readres);
+    printf("buffer: %s\n", buffer);
+    int closed = netclose(filed);
+    printf("close: %d\n", closed);
     close(filed);
-    return 1;
+    return 0;
 }

@@ -167,6 +167,20 @@ int sendPacket(int sockfd, packet *pkt) {
     return packres;
 }
 
+void seterrno(const char const *err) {
+    if(strcmp(err, "EACCES") == 0) errno = EACCES;
+    else if(strcmp(err, "EINTR") == 0) errno = EINTR;
+    else if(strcmp(err, "EISDIR") == 0) errno = EISDIR;
+    else if(strcmp(err, "ENOENT") == 0) errno = ENOENT;
+    else if(strcmp(err, "ENFILE") == 0) errno = ENFILE;
+    else if(strcmp(err, "EWOULDBLOCK") == 0) errno = EWOULDBLOCK;
+    else if(strcmp(err, "ETIMEDOUT") == 0) errno = ETIMEDOUT;
+    else if(strcmp(err, "EBADF") == 0) errno = EBADF;
+    else if(strcmp(err, "ECONNRESET") == 0) errno = ECONNRESET;
+    else if(strcmp(err, "HOST_NOT_FOUND") == 0) errno = HOST_NOT_FOUND;
+
+}
+
 char * errnoToCode(int eno) {
     switch(eno) {
         case EACCES:          return strdup("EACCES");

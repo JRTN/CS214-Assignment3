@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS= -g -Wall
 OBJS=libnetfiles.o utils.o
 
-libnetfiles.o: libnetfiles.c libnetfiles.h
+libnetfiles.o: libnetfiles.c libnetfiles.h utils.o
 	$(CC) $(CFLAGS) -c libnetfiles.c
 
 utils.o: utils.c utils.h
@@ -15,7 +15,7 @@ testclient: testclient.c utils.o
 	$(CC) -o $@ testclient.c utils.o
 
 testdriver: driver.c libnetfiles.o
-	$(CC) -o $@ driver.c libnetfiles.o
+	$(CC) -o $@ driver.c $(OBJS)
 
 clean:
 	rm -f $(OBJS) netfileserver testclient testdriver
