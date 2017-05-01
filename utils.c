@@ -129,6 +129,7 @@ packet *readPacket(int sockfd) {
     int headres = readNBytes(sockfd, length, HEADER_LENGTH);
     if(headres < 1) {
         //error
+        free(length);
         return NULL;
     }
 
