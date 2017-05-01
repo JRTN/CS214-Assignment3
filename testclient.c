@@ -5,11 +5,16 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <errno.h>
 #include <netdb.h> 
+
+#include "utils.h"
 
 void error(const char *msg)
 {
     printf("%s\n", msg);
+    printf("errno: %d\n", errno);
+    exit(EXIT_FAILURE);
 }
 
 void remove_new_line(char* string)
@@ -52,17 +57,25 @@ int main(int argc, char *argv[])
         error("ERROR connecting");
     while(1) {
       printf("Please enter the message: ");
-      bzero(buffer,256);
-      fgets(buffer,255,stdin);
-      remove_new_line(buffer);
-      n = write(sockfd,buffer,strlen(buffer)+1);
-      if (n < 0) 
+      char *message = malloc(256);
+      bzero(message,256);
+      fgets(message,255,stdin);
+      remove_new_line(message);
+      packet *pkt = packetCreate(message, strlen(message) + 1);
+      n = sendPacket(sockfd, pkt);
+      printf("n: %d\n", n);
+      //n = write(sockfd,buffer,strlen(buffer)+1);
+      if (n < 0) {
            error("ERROR writing to socket");
+      }
+
       bzero(buffer,256);
-      n = read(sockfd,buffer,255);
-      if (n < 0) 
+      //n = read(sockfd,buffer,255);
+      packet *responsepkt = readPacket(sockfd);
+      if (!responsepkt) 
            error("ERROR reading from socket");
-      printf("%s\n",buffer);
+      printf("%s\n",responsepkt->data);
+      packetDestroy(responsepkt);
     }
     close(sockfd);
     return 0;

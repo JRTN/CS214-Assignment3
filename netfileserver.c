@@ -22,21 +22,6 @@ int getActualFileDes(int fildes) {
 }
 
 /*
-    Gets the size of a message sent to the server. Every message always starts with the
-    total size of the message.
-    Parameters:
-        message - the message which contains its size
-    Return:
-        The size of the message
-*/
-long int getMessageSize(const char const *message) {
-    char *sizestr = buildToken(message, DELIMITER, true);
-    long int result = strtol(sizestr, NULL, 10);
-    free(sizestr);
-    return result;
-}
-
-/*
     Builds and returns the response containing the results of a read operation that will
     be sent back to the client. Read responses will always at least be the size that is
     defined in READ_RESPONSE_BASE_SIZE, but they also may be larger depending on the
@@ -52,18 +37,20 @@ long int getMessageSize(const char const *message) {
     Return:
         A formatted response that is to be sent to the client and interpreted client side
 */
-#define READ_RESPONSE_BASE_SIZE 30
 char * buildReadResponse(ssize_t readbytes, char *buffer) {
     char * response = NULL;
-    if(readbytes == -1) { //error readingq
-        response = malloc(READ_RESPONSE_BASE_SIZE);
+    int readbytes_len = count_digits(readbytes);
+    if(readbytes == -1) { //error reading
         char *errno_str = errnoToCode(errno);
-        sprintf(response, "%d!%zd!%s", READ_RESPONSE_BASE_SIZE, readbytes, errno_str);
+        size_t errno_str_len = strlen(errno_str);
+        int messagesize = errno_str_len + readbytes_len + 2;
+        response = malloc(messagesize);
+        sprintf(response, "%zd!%s", readbytes, errno_str);
         free(errno_str);
     } else {
-        size_t messagesize = readbytes + READ_RESPONSE_BASE_SIZE + 1;
+        int messagesize = readbytes_len + readbytes + 2;
         response = malloc(messagesize);
-        sprintf(response, "%zd!%zd!%s", messagesize, readbytes, buffer);
+        snprintf(response, messagesize, "%zd!%s", readbytes, buffer);
     }
     return response;
 }
@@ -127,15 +114,18 @@ char * parseReadMessage(const char *message) {
     Return:
         A formatted response that is to be sent to the client and interpreted client-side
 */
-#define WRITE_RESPONSE_SIZE 30
 char * buildWriteResponse(ssize_t wrotebytes) {
-    char *response = malloc(WRITE_RESPONSE_SIZE);
+    char *response = NULL;
     if(wrotebytes == -1) { //error writing to file
         char *errno_str = errnoToCode(errno);
-        sprintf(response, "%d!%d!%s", WRITE_RESPONSE_SIZE, -1, errno_str);
+        int messagesize = strlen(errno_str) + 4; //two for -1, one for delim, one for null
+        response = malloc(messagesize);
+        sprintf(response, "%d!%s", -1, errno_str);
         free(errno_str);
     } else {
-        sprintf(response, "%d!%zd", WRITE_RESPONSE_SIZE, wrotebytes);
+        int wrotebytes_len = count_digits(wrotebytes);
+        response = malloc(wrotebytes_len + 1);
+        sprintf(response, "%zd", wrotebytes);
     }
     return response;
 }
@@ -198,20 +188,26 @@ char * parseWriteMessage(const char *message) {
     Return:
         A formatted response that is to be sent to the client and interpreted client-side
 */
-#define OPEN_RESPONSE_SIZE 30
 char * buildOpenResponse(int filefd) {
-    char *response = malloc(OPEN_RESPONSE_SIZE);
+    char *response = NULL;
     if(filefd == -1) { //error opening file
         //get readable version of errno error code
         char *errno_str = errnoToCode(errno);
         //find length of readable error
-        sprintf(response, "%d!%d!%s", OPEN_RESPONSE_SIZE, filefd, errno_str);
+        int fd_length = 2;
+        size_t errno_str_len = strlen(errno_str);
+        int messagesize = fd_length + errno_str_len + 2;
+        response = malloc(messagesize);
+        sprintf(response, "%d!%s", filefd, errno_str);
         free(errno_str);
     } else {
         if(filefd == 1) {
             filefd = NEG_ONE_FD;
         }
-        sprintf(response, "%d!%d", OPEN_RESPONSE_SIZE, -filefd);
+        filefd = -filefd;
+        int fd_length = count_digits(filefd);
+        response = malloc(fd_length + 1);
+        sprintf(response, "%d", filefd);
     }
     return response;
 }
@@ -269,14 +265,15 @@ char * parseOpenMessage(const char *message) {
     Return:
         A formatted response that is to be sent to the client and interpreted client-side
 */
-#define CLOSE_RESPONSE_SIZE 30
 char * buildCloseResponse(int close_result) {
-    char *response = malloc(CLOSE_RESPONSE_SIZE);
+    char *response = NULL;
     if(close_result == 0) { //closed successfully
-        sprintf(response, "%d!%d", CLOSE_RESPONSE_SIZE, close_result);
+        response = strdup("0");
     } else { //error closing
         char *errno_str = errnoToCode(errno);
-        sprintf(response, "%d!%d!%s", CLOSE_RESPONSE_SIZE, close_result, errno_str);
+        size_t errno_str_len = strlen(errno_str);
+        response = malloc(errno_str_len + 4);
+        sprintf(response, "-1!%s", errno_str);
         free(errno_str);
     }
     return response;
@@ -335,24 +332,27 @@ void * clientHandler(void * client) {
     #define clientfd client_data->client_fd
     char *response = NULL;
     while(1) {
-        packet *pkt = NULL;
-        if( (pkt = readPacket(clientfd)) ) {
-            header_size_t pktsze = pkt->size;
-            printf("Packet Length: %d\n", pktsze);
-            response = handleClientMessage((char *)pkt->data);
+        packet *clientpkt = NULL;
+        /* RECEIVE CLIENT PACKET */
+        if( (clientpkt = readPacket(clientfd)) ) {
+            printf("Packet Length: %d\n", clientpkt->size);
+            /* HANDLE CLIENT MESSAGE */
+            response = handleClientMessage((char *)clientpkt->data);
+            packetDestroy(clientpkt);
             if(!response) break; //something went horribly wrong
-            uint32_t responselen = strlen(response);
-            //if(write(clientfd, response, strlen(response) + 1) < 0) {
-            if(sendPacket(clientfd, (void*) response, responselen) < 0) {
-                break;
+            /* CONSTRUCT RESPONSE PACKET */
+            uint32_t reslen = strlen(response);
+            packet *responsepkt = packetCreate(response, reslen + 1);
+            /* SEND RESPONSE PACKET BACK TO CLIENT */
+            int response_res = sendPacket(clientfd, responsepkt);
+            packetDestroy(responsepkt);
+            if(response_res < 0) {
+                break; //error
             }
-            free(response);
         } else {
             break;
         }
     }
-    write(clientfd, END_CONN_MSG, END_CONN_MSG_LEN);
-    sendPacket(clientfd, END_CONN_MSG, END_CONN_MSG_LEN);
     close(clientfd);
     #undef clientfd
     return 0;

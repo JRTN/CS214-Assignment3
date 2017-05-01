@@ -23,8 +23,9 @@ int readNBytes(int, void *, int);
 char *errnoToCode(int);
 char *buildToken(const char *, const char, bool);
 packet *readPacket(int);
-int sendPacket(int, void *, header_size_t);
+int sendPacket(int, packet *);
 void packetDestroy(packet *);
 packet *packetCreate(void *, header_size_t);
+int count_digits(int);
 
 #endif

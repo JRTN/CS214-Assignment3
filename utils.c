@@ -9,6 +9,10 @@
 
 #include "utils.h"
 
+int count_digits(int arg) {
+    return snprintf(NULL, 0, "%d", arg);
+}
+
 void errormsg(const char const *msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
 }
@@ -116,13 +120,16 @@ void packetDestroy(packet *p) {
         A struct containing the packet data and size
 */
 packet *readPacket(int sockfd) {
+    /* READ SIZE PREFIX */
     header_size_t length = 0;
     int headres = readNBytes(sockfd, (void*)&length, HEADER_LENGTH);
-    length = ntohl(length);
     if(headres < 1) {
         //error
         return NULL;
     }
+    length = ntohl(length);
+
+    /* READ DATA */
     void *data = malloc(length);
     int datares = readNBytes(sockfd, data, length);
     if(datares < 1) {
@@ -144,14 +151,15 @@ packet *readPacket(int sockfd) {
     Return:
         -1 or 0 on error, otherwise the number of bytes sent
 */
-int sendPacket(int sockfd, void *data, header_size_t length) {
+int sendPacket(int sockfd, packet *pkt) {
+    uint32_t length = pkt->size;
     length = htonl(length);
     int headres = writeToSocket(sockfd, (void*)&length, HEADER_LENGTH);
     if(headres < 1) {
         //error
         return headres;
     }
-    int packres = writeToSocket(sockfd, data, length);
+    int packres = writeToSocket(sockfd, pkt->data, length);
     return packres;
 }
 

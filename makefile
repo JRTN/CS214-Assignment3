@@ -11,8 +11,8 @@ utils.o: utils.c utils.h
 netfileserver: netfileserver.c netfileserver.h utils.o
 	$(CC) $(CFLAGS) -pthread -o $@ netfileserver.c utils.o
 
-testclient: testclient.c
-	$(CC) -o $@ testclient.c
+testclient: testclient.c utils.o
+	$(CC) -o $@ testclient.c utils.o
 
 testdriver: driver.c libnetfiles.o
 	$(CC) -o $@ driver.c libnetfiles.o
