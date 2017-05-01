@@ -16,10 +16,20 @@ int main(int argc, char **argv) {
     if(check == -1){
         return -1;
     }
-    int filed = netopen(TESTF1, 0);
+    int filed = netopen(TESTF1, O_RDWR);
     printf("file descriptor: %d\n", filed);
     if(filed == -1) {
         printf("Errno: %d\n", errno);
+    }
+    ssize_t writeres = netwrite(filed, "abc", 3);
+    printf("write res: %zd\n", writeres);
+    if(writeres == -1) {
+        printf("Errno: %d\n", errno);
+    }
+    int dummyfd = netopen("doesntexist", O_RDONLY);
+    printf("file descriptor: %d\n", dummyfd);
+    if(dummyfd == -1) {
+        printf("Errno:  %d\n", errno);
     }
     char buffer[6] = {0};
     ssize_t readres = netread(filed, buffer, 5);

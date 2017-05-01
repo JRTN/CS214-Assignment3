@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #include "libnetfiles.h"
 #include "utils.h"

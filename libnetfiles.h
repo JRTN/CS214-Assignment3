@@ -16,8 +16,6 @@
 
 #define h_addr h_addr_list[0]
 
-#define HOST_NOT_FOUND 100
-
 ssize_t netread(int, void *, size_t);
 ssize_t netwrite(int, const void *, size_t);
 
