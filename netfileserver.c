@@ -250,9 +250,9 @@ char * parseOpenMessage(const char *message) {
     close responses will always be the size defined by CLOSE_RESPONSE_SIZE, even though
     the actual information contained within may not need all bytes to be represented.
     close responses are of the following form:
-        <size>!0
+        !0
     if there are no errors during the close file operation, or
-        <size>!-1!<error>
+        -1!<error>
     if there is an error during the close file operation.
     Parameters:
         close_result - the value returned from the call to close()
@@ -321,36 +321,6 @@ char * handleClientMessage(const char *message) {
     }
 }
 
-void * clientHandler(void * client) {
-    int clientfd = *(int*)client;
-    free(client);
-    char *response = NULL;
-    while(1) {
-        packet *clientpkt = NULL;
-        /* RECEIVE CLIENT PACKET */
-        if( (clientpkt = readPacket(clientfd)) ) {
-            printf("Packet Length: %d\n", clientpkt->size);
-            /* HANDLE CLIENT MESSAGE */
-            response = handleClientMessage((char *)clientpkt->data);
-            packetDestroy(clientpkt);
-            if(!response) break; //something went horribly wrong
-            /* CONSTRUCT RESPONSE PACKET */
-            uint32_t reslen = strlen(response);
-            packet *responsepkt = packetCreate(response, reslen + 1);
-            /* SEND RESPONSE PACKET BACK TO CLIENT */
-            int response_res = sendPacket(clientfd, responsepkt);
-            packetDestroy(responsepkt);
-            if(response_res < 0) {
-                break; //error
-            }
-        } else {
-            break;
-        }
-    }
-    close(clientfd);
-    return 0;
-}
-
 /*
     Creates a new TCP IPv4 socket.
     Return:
@@ -388,6 +358,36 @@ static int bindSocket(int sockfd) {
     return 0;
 }
 
+void * clientHandler(void * client) {
+    int clientfd = *(int*)client;
+    free(client);
+    char *response = NULL;
+    while(1) {
+        packet *clientpkt = NULL;
+        /* RECEIVE CLIENT PACKET */
+        if( (clientpkt = readPacket(clientfd)) ) {
+            /* HANDLE CLIENT MESSAGE */
+            response = handleClientMessage((char *)clientpkt->data);
+            packetDestroy(clientpkt);
+            if(!response) break; //something went horribly wrong
+            /* CONSTRUCT RESPONSE PACKET */
+            uint32_t reslen = strlen(response);
+            packet *responsepkt = packetCreate(response, reslen + 1);
+            /* SEND RESPONSE PACKET BACK TO CLIENT */
+            int response_res = sendPacket(clientfd, responsepkt);
+            packetDestroy(responsepkt);
+            if(response_res < 0) {
+                break; //error
+            }
+        } else {
+            break;
+        }
+    }
+    printf("Exiting client (%d) thread\n", clientfd);
+    close(clientfd);
+    return 0;
+}
+
 int main(void) {
     //Create a socket with the socket() system call
     int sockfd = createSocket();
@@ -397,14 +397,14 @@ int main(void) {
     }
     //Listen for connections with the listen() system call
     listen(sockfd, BACKLOG_SIZE);
-    //Accept a connection with the accept() system call
     while(1) {
         struct sockaddr_in client_addr = {0};
         socklen_t client_len;
+        //Accept a connection with the accept() system call
         int newsocket_fd = accept(sockfd, (struct sockaddr *) &client_addr, &client_len);
         if(newsocket_fd < 0) {
             printf("Error on accept\n");
-            return 0;
+            return 1;
         } else {
             printf("Connection accepted on socket (%d)\n", sockfd);
             printf("Client socket fd: %d\n", newsocket_fd);

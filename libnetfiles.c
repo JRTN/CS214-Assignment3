@@ -17,6 +17,8 @@
 #define MININT -2147483648
 #define CHUNK_SIZE 5
 
+#define DEV false
+
 static int sockfd = -1;
 
 static char *buildOpenRequest(const char *pathname, int flags) {
@@ -37,8 +39,12 @@ static int parseOpenResponse(char *resp){
 }
 
 int netopen(const char *pathname, int flags) {
+    if(flags != O_RDONLY && flags != O_WRONLY && flags != O_RDWR) {
+        errno = EINVFLAG;
+        return -1; //invalid flags
+    }
     char *orequest = buildOpenRequest(pathname, flags);
-    printf("message: %s\n",orequest);
+    if(DEV) printf("message: %s\n",orequest);
     packet *reqpkt = packetCreate(orequest, strlen(orequest) + 1);
     int sendres = sendPacket(sockfd, reqpkt);
     packetDestroy(reqpkt);
@@ -70,9 +76,9 @@ ssize_t parseReadResponse(char* resp, void *buf){
 }
 
 ssize_t netread(int fildes, void *buf, size_t nbyte) {
-    printf("file descriptor %d\n", fildes);
+    if(DEV) printf("file descriptor %d\n", fildes);
     char *rrequest = buildReadRequest(fildes, nbyte);
-    printf("message: %s\n",rrequest );
+    if(DEV) printf("message: %s\n",rrequest );
 
     packet *reqpkt = packetCreate(rrequest, strlen(rrequest) + 1);
     int sendres = sendPacket(sockfd, reqpkt);
@@ -89,10 +95,8 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
     return result;
 }
 
-
-
 static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
-    printf("file descriptor %d\n", fildes);
+    if(DEV) printf("file descriptor %d\n", fildes);
     int messagesize = count_digits(fildes) + count_digits(nbyte) + nbyte + 5; //1 for w, 3 for delimiters, 1 for null terminator
     char *wrequest = malloc(messagesize);
     snprintf(wrequest, messagesize, "w!%d!%zu!%s", fildes, nbyte, (char *)buf);
@@ -126,7 +130,7 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
 }
 
 static char *buildCloseRequest(int fildes){
-    printf("file descriptor %d\n", fildes);
+    if(DEV) printf("file descriptor %d\n", fildes);
     int messagesize = count_digits(fildes) + 3; //1 for c, 1 for delimiter, 1 for terminator
     char *crequest= malloc(messagesize);
     sprintf(crequest, "c!%d", fildes);
@@ -159,17 +163,19 @@ int netclose(int fd) {
     return result;
 }
 
+/*
+    Initializes a connection to the server indicated by the hostname.
+*/
 int netserverinit(char *hostname) {
     //Create socket with socket() system call
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        errormsg("ERROR opening socket", __FILE__, __LINE__);
+        if(DEV) errormsg("ERROR opening socket", __FILE__, __LINE__);
         return -1;
     }
     //Get server information
     struct hostent *server;
     if(!(server = gethostbyname(hostname))) {
-        errormsg("ERROR no such host", __FILE__, __LINE__);
-        errno = HOST_NOT_FOUND;
+        if(DEV) errormsg("ERROR no such host", __FILE__, __LINE__);
         return -1;
     }
     struct sockaddr_in serv_addr = {0};
@@ -178,9 +184,9 @@ int netserverinit(char *hostname) {
     serv_addr.sin_port = htons(PORT);
     //Connect the socket to the address of the server using the connect() system call
     if(connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-        errormsg("ERROR can't connect to host", __FILE__, __LINE__);
+        if(DEV) errormsg("ERROR can't connect to host", __FILE__, __LINE__);
         return -1;
     }
-    printf("socket %d\n", sockfd);
+    if(DEV) printf("socket %d\n", sockfd);
     return 0;
 }

@@ -8,6 +8,8 @@
 #define O_WRONLY 1
 #define O_RDWR   2
 
+#define EINVFLAG 400
+
 #define READ 1
 #define WRITE 2
 #define DELIMITER '!'
