@@ -8,35 +8,9 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <stdbool.h>
 
-#define PORT 40690
-#define BACKLOG_SIZE 5
-#define THREAD_LIMIT 5
-#define CHUNK_SIZE 5
-#define DELIMITER '!'
-#define MAX_INT_LENGTH 11
-
-#define READ_OP 'r'
-#define WRITE_OP 'w'
-#define OPEN_OP 'o'
-#define CLOSE_OP 'c'
-
-#define OUR_O_RDONLY 1
-#define OUR_O_WRONLY 2
-#define OUR_O_RDWR   3
-
-#define NEG_ONE_FD 100000
-
-typedef struct thread_info_t{
-    int client_fd;
-    struct sockaddr_in client_addr;
-    socklen_t client_addr_len;
-} thread_info_t;
+#include "netfileserver.h"
 
 void errormsg(const char const *msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
@@ -53,6 +27,21 @@ char * intToStr(const int num) {
     int ret = snprintf(result, MAX_INT_LENGTH, "%d", num);
     result = realloc(result, ret + 1);
     return result;
+}
+
+int writeToSocket(int sockfd, char *data, int len) {
+    int totalSent = 0;
+    int bytesSent = 0;
+    while(len > 0) {
+        bytesSent = write(sockfd, data, len);
+        if(bytesSent < 1) {
+            return bytesSent;
+        }
+        totalSent += bytesSent;
+        data += bytesSent;
+        len -= bytesSent;
+    }
+    return totalSent;
 }
 
 char * errnoToCode(int eno) {
@@ -176,10 +165,12 @@ char * performReadOp(const char *nbyte, const char *filedes) {
     printf("Perform Read Op:\n");
     printf("nbyte: %s\n", nbyte);
     printf("filedes: %s\n", filedes);
-
     int n_nbyte = strtol(nbyte, NULL, 10);
     int n_filedes = strtol(filedes, NULL, 10);
     int actualFileDes = getActualFileDes(n_filedes);
+
+    printf("nbyte: %d\n", n_nbyte);
+    printf("filedes: %d\n", actualFileDes);
 
     char *buffer = malloc(n_nbyte + 1);
     buffer[n_nbyte] = '\0';
@@ -399,8 +390,7 @@ char * parseCloseMessage(const char *message) {
 }
 
 char * performInvalidOp(const char *message) {
-    printf("Perform Invalid Op\n");
-    return NULL;
+    return strdup(MALFORMED_COMMAND_MSG);
 }
 
 /*
@@ -410,12 +400,12 @@ char * performInvalidOp(const char *message) {
         message - the message that will be parsed
 */
 char * handleClientMessage(const char *message) {
-    if(!message) return NULL; //error
+    if(!message) return strdup(MALFORMED_COMMAND_MSG); //error
     //Advance to first delimiter
     while(*message && *message != DELIMITER) message++;
         //Advance to character after delimiter
         message = safeAdvanceCharacters(message, 1);
-        if(!*message) return NULL; //wasn't able to advance two characters before hitting end of string
+        if(!*message) return strdup(MALFORMED_COMMAND_MSG); //wasn't able to advance two characters before hitting end of string
         printf("Operation: %c\n", *message);
         char operation = *message;
         //Advance to start of unique messages
@@ -441,15 +431,18 @@ void * clientHandler(void * client) {
             printf("Client (%d) message: %s\n", clientfd, buffer);
             printf("Read Bytes: %d Expected Bytes: %ld\n", readbytes, expectedsize);
             response = handleClientMessage(buffer);
-            //response = "I got your message";
-            if(write(clientfd, response, strlen(response)) < 0) {
-                //error
+            if(!response) break; //something went horribly wrong
+            //if(write(clientfd, response, strlen(response) + 1) < 0) {
+            if(writeToSocket(clientfd, response, strlen(response) + 1) < 0) {
+                break;
             }
+            free(response);
         } else {
-            //error receiving message from client
+            break;
         }
     }
-
+    write(clientfd, END_CONN_MSG, END_CONN_MSG_LEN);
+    close(clientfd);
     #undef clientfd
     return 0;
 }
