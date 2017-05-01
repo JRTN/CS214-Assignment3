@@ -63,7 +63,7 @@ char * intToStr(const int num) {
     return result;
 }
 
-int writeToSocket(int sockfd, char *data, int len) {
+int writeToSocket(int sockfd, void *data, int len) {
     int totalSent = 0;
     int bytesSent = 0;
     while(len > 0) {
@@ -76,6 +76,51 @@ int writeToSocket(int sockfd, char *data, int len) {
         len -= bytesSent;
     }
     return totalSent;
+}
+
+int readNBytes(int sockfd, void *data, int len) {
+    int totalRead = 0;
+    int bytesRead = 0;
+    while(bytesRead < len) {
+        bytesRead = read(sockfd, data, len);
+        if(bytesRead < 1) {
+            
+        }
+        totalRead += bytesRead;
+        data += bytesRead;
+        len  -= bytesRead;
+    }
+    return totalRead;
+}
+
+char *readPacket(int sockfd) {
+    header_size_t length = 0;
+    int headres = readNBytes(sockfd, (void*)&length, HEADER_LENGTH);
+    length = ntohl(length);
+    if(headres < 1) {
+        //error
+        return NULL;
+    }
+    char *packet = malloc(length + 1);
+    packet[length] = 0;
+    int packres = readNBytes(sockfd, packet, length);
+    if(packres < 1) {
+        //error
+        free(packet);
+        return NULL;
+    }
+    return packet;
+}
+
+int sendPacket(int sockfd, void *data, header_size_t length) {
+    length = htonl(length);
+    int headres = writeToSocket(sockfd, (void*)&length, HEADER_LENGTH);
+    if(headres < 1) {
+        //error
+        return headres;
+    }
+    int packres = writeToSocket(sockfd, data, length);
+    return packres;
 }
 
 char * errnoToCode(int eno) {
@@ -94,17 +139,4 @@ char * errnoToCode(int eno) {
     }
 }
 
-int readNBytes(int sockfd, char *data, int len) {
-    int totalRead = 0;
-    int bytesRead = 0;
-    while(bytesRead < len) {
-        bytesRead = read(sockfd, data, len);
-        if(bytesRead < 1) {
-            
-        }
-        totalRead += bytesRead;
-        data += bytesRead;
-        len  -= bytesRead;
-    }
-    return totalRead;
-}
+

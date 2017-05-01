@@ -13,10 +13,6 @@
 #include "netfileserver.h"
 #include "utils.h"
 
-char *readPacket(int sockfd) {
-    
-}
-
 int getActualFileDes(int fildes) {
     if(fildes == NEG_ONE_FD) {
         return 1;
@@ -321,21 +317,16 @@ char * performInvalidOp(const char *message) {
 */
 char * handleClientMessage(const char *message) {
     if(!message) return strdup(MALFORMED_COMMAND_MSG); //error
-    //Advance to first delimiter
-    while(*message && *message != DELIMITER) message++;
-        //Advance to character after delimiter
-        message = safeAdvanceCharacters(message, 1);
-        if(!*message) return strdup(MALFORMED_COMMAND_MSG); //wasn't able to advance two characters before hitting end of string
-        printf("Operation: %c\n", *message);
-        char operation = *message;
-        //Advance to start of unique messages
-        message = safeAdvanceCharacters(message, 2);
-        switch(operation) {
-            case OPEN_OP:  return parseOpenMessage(message);
-            case READ_OP:  return parseReadMessage(message);
-            case WRITE_OP: return parseWriteMessage(message);
-            case CLOSE_OP: return parseCloseMessage(message);
-            default:       return performInvalidOp(message); //invalid operation
+    printf("Operation: %c\n", *message);
+    char operation = *message;
+    //Advance to start of unique messages
+    message = safeAdvanceCharacters(message, 2);
+    switch(operation) {
+        case OPEN_OP:  return parseOpenMessage(message);
+        case READ_OP:  return parseReadMessage(message);
+        case WRITE_OP: return parseWriteMessage(message);
+        case CLOSE_OP: return parseCloseMessage(message);
+        default:       return performInvalidOp(message); //invalid operation
     }
 }
 
@@ -344,16 +335,17 @@ void * clientHandler(void * client) {
     #define clientfd client_data->client_fd
     char buffer[4096] = {0};
     char *response = NULL;
-    int readbytes = 0;
     while(1) {
-        if( (readbytes = read(clientfd, &buffer, 4096)) > 0) {
-            long int expectedsize = getMessageSize(buffer);
+        char *packet = NULL;
+        if( (packet = readPacket(clientfd)) ) {
+            size_t packetlen = strlen(packet);
             printf("Client (%d) message: %s\n", clientfd, buffer);
-            printf("Read Bytes: %d Expected Bytes: %ld\n", readbytes, expectedsize);
-            response = handleClientMessage(buffer);
+            printf("Packet Length: %zu\n", packetlen);
+            response = handleClientMessage(packet);
             if(!response) break; //something went horribly wrong
+            uint32_t responselen = strlen(response);
             //if(write(clientfd, response, strlen(response) + 1) < 0) {
-            if(writeToSocket(clientfd, response, strlen(response) + 1) < 0) {
+            if(sendPacket(clientfd, (void*) response, responselen) < 0) {
                 break;
             }
             free(response);
@@ -362,6 +354,7 @@ void * clientHandler(void * client) {
         }
     }
     write(clientfd, END_CONN_MSG, END_CONN_MSG_LEN);
+    sendPacket(clientfd, END_CONN_MSG, END_CONN_MSG_LEN);
     close(clientfd);
     #undef clientfd
     return 0;
