@@ -149,6 +149,7 @@ int parseOpenResponse(){
     int readbits = 0;
     if((readbits = read(sockfd, buffer, 255)) < 0) {
         errormsg("Error reading socket response", __FILE__, __LINE__);
+        return -1;
     }
     int size = getMessageSize(buffer);
     int flag = *(buffer + strlen(size) + 1) - '0';
@@ -273,8 +274,8 @@ int netclose(int fd) {
         //error
     }
     //read server's response
-    parseCloseResponse();
-    return 0;
+    ;
+    return parseCloseResponse();
 }
 
 int parseCloseResponse(){
@@ -282,6 +283,7 @@ int parseCloseResponse(){
     int readbits = 0;
     if((readbits = read(sockfd, buffer, 255)) < 0) {
       errormsg("Error reading socket response", __FILE__, __LINE__);
+      return -1;
     }
     int size = getMessageSize(buffer);
     buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
@@ -292,7 +294,9 @@ int parseCloseResponse(){
     if(num == -1){
       buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
       char* error = buildToken(buffer,DELIMITER,true);
+      return -1;
     }
+    return 0;
 
 }
 
