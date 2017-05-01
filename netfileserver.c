@@ -322,19 +322,6 @@ char * performOpenOp(int flag, const char *pathname) {
     printf("Perform Open Op:\n");
     printf("Flag: %d\n", flag);
     printf("Pathname: %s\n", pathname);
-
-    switch(flag) {
-        case OUR_O_RDONLY:
-            flag = O_RDONLY;
-        break;
-        case OUR_O_WRONLY:
-            flag = O_WRONLY;
-        break;
-        case OUR_O_RDWR:
-            flag = O_RDWR;
-        break;
-    }
-    
     int filefd = open(pathname, flag);
     printf("filefd: %d\n", filefd);
     printf("flag: 0x%x\n", flag);
