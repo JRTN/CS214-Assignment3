@@ -10,9 +10,10 @@
 
 #define READ 1
 #define WRITE 2
+#define DELIMITER '!'
 
 
-/* ERROR CODES 
+/* ERROR CODES
 #define EACCES             1
 #define EINTR              2
 #define EISDIR             3
@@ -26,6 +27,8 @@
 #define ECONNRESET        11
 #define HOST_NOT_FOUND    13
 #define INVALID_FILE_MODE 14*/
+
+
 
 #define PORT 40690
 
