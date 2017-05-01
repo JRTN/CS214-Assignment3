@@ -12,6 +12,16 @@ void error(const char *msg)
     printf("%s\n", msg);
 }
 
+void remove_new_line(char* string)
+{
+  int length;
+  if( (length =strlen(string) ) >0)
+  {
+       if(string[length-1] == '\n')
+                string[length-1] ='\0';
+  }
+}
+
 int main(int argc, char *argv[])
 {
     int sockfd, portno, n;
@@ -44,6 +54,7 @@ int main(int argc, char *argv[])
       printf("Please enter the message: ");
       bzero(buffer,256);
       fgets(buffer,255,stdin);
+      remove_new_line(buffer);
       n = write(sockfd,buffer,strlen(buffer)+1);
       if (n < 0) 
            error("ERROR writing to socket");

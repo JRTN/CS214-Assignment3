@@ -55,8 +55,8 @@ char * intToStr(const int num) {
     return result;
 }
 
-char * errnoToCode() {
-    switch(errno) {
+char * errnoToCode(int eno) {
+    switch(eno) {
         case EACCES:          return strdup("EACCES");
         case EINTR:           return strdup("EINTR");
         case EISDIR:          return strdup("EISDIR");
@@ -152,7 +152,7 @@ char * buildReadResponse(ssize_t readbytes, char *buffer) {
     char * response = NULL;
     if(readbytes == -1) { //error readingq
         response = malloc(READ_RESPONSE_BASE_SIZE);
-        char *errno_str = errnoToCode();
+        char *errno_str = errnoToCode(errno);
         sprintf(response, "%d!%zd!%s", READ_RESPONSE_BASE_SIZE, readbytes, errno_str);
         free(errno_str);
     } else {
@@ -224,7 +224,7 @@ char * parseReadMessage(const char *message) {
 char * buildWriteResponse(ssize_t wrotebytes) {
     char *response = malloc(WRITE_RESPONSE_SIZE);
     if(wrotebytes == -1) { //error writing to file
-        char *errno_str = errnoToCode();
+        char *errno_str = errnoToCode(errno);
         sprintf(response, "%d!%d!%s", WRITE_RESPONSE_SIZE, -1, errno_str);
         free(errno_str);
     } else {
@@ -296,7 +296,7 @@ char * buildOpenResponse(int filefd) {
     char *response = malloc(OPEN_RESPONSE_SIZE);
     if(filefd == -1) { //error opening file
         //get readable version of errno error code
-        char *errno_str = errnoToCode();
+        char *errno_str = errnoToCode(errno);
         //find length of readable error
         sprintf(response, "%d!%d!%s", OPEN_RESPONSE_SIZE, filefd, errno_str);
         free(errno_str);
