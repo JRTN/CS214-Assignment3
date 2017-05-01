@@ -72,8 +72,10 @@ int writeToSocket(int sockfd, void *data, int len) {
     int bytesSent = 0;
     while(len > 0) {
         bytesSent = write(sockfd, data, len);
-        if(bytesSent < 1) {
-            return bytesSent;
+        if(bytesSent < 0) {
+            return -1; //error
+        } else if(bytesSent == 0) {
+            break;
         }
         totalSent += bytesSent;
         data += bytesSent;
@@ -87,8 +89,10 @@ int readNBytes(int sockfd, void *data, int len) {
     int bytesRead = 0;
     while(bytesRead < len) {
         bytesRead = read(sockfd, data, len);
-        if(bytesRead < 1) {
-            
+        if(bytesRead < 0) {
+            return -1;
+        } else if(bytesRead == 0) {
+            break;
         }
         totalRead += bytesRead;
         data += bytesRead;
@@ -121,23 +125,22 @@ void packetDestroy(packet *p) {
 */
 packet *readPacket(int sockfd) {
     /* READ SIZE PREFIX */
-    header_size_t length = 0;
-    int headres = readNBytes(sockfd, (void*)&length, HEADER_LENGTH);
+    header_size_t * length = malloc(sizeof(header_size_t));
+    int headres = readNBytes(sockfd, length, HEADER_LENGTH);
     if(headres < 1) {
         //error
         return NULL;
     }
-    length = ntohl(length);
 
     /* READ DATA */
-    void *data = malloc(length);
-    int datares = readNBytes(sockfd, data, length);
+    void *data = malloc(*length);
+    int datares = readNBytes(sockfd, data, *length);
     if(datares < 1) {
         //error
         free(data);
         return NULL;
     }
-    packet *pkt = packetCreate(data, length);
+    packet *pkt = packetCreate(data, *length);
     return pkt;
 }
 
@@ -152,14 +155,14 @@ packet *readPacket(int sockfd) {
         -1 or 0 on error, otherwise the number of bytes sent
 */
 int sendPacket(int sockfd, packet *pkt) {
-    uint32_t length = pkt->size;
-    length = htonl(length);
-    int headres = writeToSocket(sockfd, (void*)&length, HEADER_LENGTH);
+    header_size_t *length = malloc(sizeof(header_size_t));
+    *length = pkt->size;
+    int headres = writeToSocket(sockfd, (void*)length, HEADER_LENGTH);
     if(headres < 1) {
         //error
         return headres;
     }
-    int packres = writeToSocket(sockfd, pkt->data, length);
+    int packres = writeToSocket(sockfd, pkt->data, *length);
     return packres;
 }
 
