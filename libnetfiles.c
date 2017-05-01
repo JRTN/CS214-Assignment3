@@ -101,7 +101,7 @@ int numPlaces (int n) {
 }
 
 static int sendMessageToSocket(const char const *message) {
-    printf("socket %s\n", intToStr(sockfd));
+    printf("file descriptor %d\n", fildes);
     int wrotebits = 0;
     if((wrotebits = write(sockfd, message, strlen(message))) < 0) {
         errormsg("ERROR writing to socket", __FILE__, __LINE__);
@@ -111,7 +111,7 @@ static int sendMessageToSocket(const char const *message) {
 }
 
 static void printSocketResponse() {
-    printf("socket %d\n", sockfd);
+    printf("file descriptor %d\n", fildes);
     char buffer[256] = {0};
     int readbits = 0;
     if((readbits = read(sockfd, buffer, 255)) < 0) {
@@ -127,23 +127,6 @@ static char *buildOpenRequest(const char *pathname, int flags) {
     sprintf(omessage, "%d!o!%d!%s",messageSize, flags, pathname);
     return omessage;
 }
-
-int netopen(const char *pathname, int flags) {
-    printf("socket %d\n", sockfd);
-    char *orequest = buildOpenRequest(pathname, flags);
-    printf("%s\n",orequest);
-    //send request to server
-    int wrotebits = sendMessageToSocket(orequest);
-    free(orequest);
-    if(wrotebits < 0) {
-      //error
-    }
-    //read server's response
-    parseOpenResponse();
-
-    return 0;
-}
-
 int parseOpenResponse(){
     char* buffer = {0};
     int readbits = 0;
@@ -165,6 +148,24 @@ int parseOpenResponse(){
     printf("%s\n",intToStr(fd));
     return fd;
 }
+
+int netopen(const char *pathname, int flags) {
+    printf("file descriptor %d\n", fildes);
+    char *orequest = buildOpenRequest(pathname, flags);
+    printf("%s\n",orequest);
+    //send request to server
+    int wrotebits = sendMessageToSocket(orequest);
+    free(orequest);
+    if(wrotebits < 0) {
+      //error
+    }
+    //read server's response
+    parseOpenResponse();
+
+    return 0;
+}
+
+
 
 static char *buildReadRequest(int fildes, size_t nbyte) {
     char *rrequest = malloc(200);
@@ -196,7 +197,7 @@ ssize_t parseReadResponse(char* buf){
 }
 
 ssize_t netread(int fildes, void *buf, size_t nbyte) {
-    printf("socket %d\n", sockfd);
+    printf("file descriptor %d\n", fildes);
     char *rrequest = buildReadRequest(fildes, nbyte);
     int wrotebits = sendMessageToSocket(rrequest);
     free(rrequest);
@@ -211,7 +212,7 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
 
 
 static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
-    printf("socket %d\n", sockfd);
+    printf("file descriptor %d\n", fildes);
     char nullTermBuf[nbyte+1];
     nullTermBuf[nbyte] = '\0';
     memcpy(nullTermBuf, buf, nbyte);
@@ -233,13 +234,13 @@ ssize_t parseWriteResponse(){
   if(!*buffer) {
       //error, hit end of string before finding pathname
   }
-  int nbyte = buildToken(buffer, DELIMITER, true);
+  int nbyte = atoi(buildToken(buffer, DELIMITER, true));
   printf("%s\n",intToStr(nbyte));
   return nbyte;
 }
 
 ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
-    printf("socket %d\n", sockfd);
+    printf("file descriptor %d\n", fildes);
     char *wrequest = buildWriteRequest(fildes, buf, nbyte);
     int wrotebits = sendMessageToSocket(wrequest);
     free(wrequest);
@@ -256,7 +257,7 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
 
 
 static char *buildCloseRequest(int fildes){
-    printf("socket %d\n", sockfd);
+    printf("file descriptor %d\n", fildes);
     int messageSize = 4+strlen(intToStr(fildes));
     messageSize = messageSize + strlen(intToStr(messageSize));
     char *cmessage = malloc(messageSize);
@@ -274,7 +275,6 @@ int netclose(int fd) {
         //error
     }
     //read server's response
-    ;
     return parseCloseResponse();
 }
 
@@ -290,7 +290,7 @@ int parseCloseResponse(){
     if(!*buffer) {
         //error, hit end of string before finding pathname
     }
-    int num = buildToken(buffer, DELIMITER, true);
+    int num = atoi(buildToken(buffer, DELIMITER, true));
     if(num == -1){
       buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
       char* error = buildToken(buffer,DELIMITER,true);

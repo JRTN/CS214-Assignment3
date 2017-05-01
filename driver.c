@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
     if(check == -1){
         return -1;
     }
-    int filed = netopen("~/Desktop/", 0);
+    int filed = netopen("/Documents/SysPrg/CS214-Assignment3/hi.txt", 0);
     printf("file descriptor: %d\n", filed);
     //char buffer[256] = {0};
     netclose(filed);
