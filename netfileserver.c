@@ -333,15 +333,13 @@ char * handleClientMessage(const char *message) {
 void * clientHandler(void * client) {
     thread_info_t* client_data = (thread_info_t*) client;
     #define clientfd client_data->client_fd
-    char buffer[4096] = {0};
     char *response = NULL;
     while(1) {
-        char *packet = NULL;
-        if( (packet = readPacket(clientfd)) ) {
-            size_t packetlen = strlen(packet);
-            printf("Client (%d) message: %s\n", clientfd, buffer);
-            printf("Packet Length: %zu\n", packetlen);
-            response = handleClientMessage(packet);
+        packet *pkt = NULL;
+        if( (pkt = readPacket(clientfd)) ) {
+            header_size_t pktsze = pkt->size;
+            printf("Packet Length: %d\n", pktsze);
+            response = handleClientMessage((char *)pkt->data);
             if(!response) break; //something went horribly wrong
             uint32_t responselen = strlen(response);
             //if(write(clientfd, response, strlen(response) + 1) < 0) {

@@ -93,7 +93,29 @@ int readNBytes(int sockfd, void *data, int len) {
     return totalRead;
 }
 
-char *readPacket(int sockfd) {
+packet *packetCreate(void *data, header_size_t length) {
+    packet *p = malloc(sizeof(packet));
+    p->size = length;
+    p->data = data;
+    return p;
+}
+
+void packetDestroy(packet *p) {
+    free(p->data);
+    free(p);
+}
+
+/*
+    Attempts to receive a packet in length prefix form. First, a number
+    of bytes defined in HEADER_LENGTH are read from the socket. This is
+    the length of the packet to come. Next, the packet is read from the 
+    socket, stored in a char *, and null terminated then returned.
+    Parameters:
+        sockfd - the socket from which the packet will be read
+    Return:
+        A struct containing the packet data and size
+*/
+packet *readPacket(int sockfd) {
     header_size_t length = 0;
     int headres = readNBytes(sockfd, (void*)&length, HEADER_LENGTH);
     length = ntohl(length);
@@ -101,17 +123,27 @@ char *readPacket(int sockfd) {
         //error
         return NULL;
     }
-    char *packet = malloc(length + 1);
-    packet[length] = 0;
-    int packres = readNBytes(sockfd, packet, length);
-    if(packres < 1) {
+    void *data = malloc(length);
+    int datares = readNBytes(sockfd, data, length);
+    if(datares < 1) {
         //error
-        free(packet);
+        free(data);
         return NULL;
     }
-    return packet;
+    packet *pkt = packetCreate(data, length);
+    return pkt;
 }
 
+/*
+    Attempts to send a packet containing data to the given socket. Packets
+    are sent in length prefix form.
+    Parameters:
+        sockfd - the socket to which the packet will be sent
+        data - the data to be sent
+        length - the length of the data in bytes
+    Return:
+        -1 or 0 on error, otherwise the number of bytes sent
+*/
 int sendPacket(int sockfd, void *data, header_size_t length) {
     length = htonl(length);
     int headres = writeToSocket(sockfd, (void*)&length, HEADER_LENGTH);
