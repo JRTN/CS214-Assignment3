@@ -120,8 +120,7 @@ static void printSocketResponse() {
 
 static char *buildOpenRequest(const char *pathname, int flags) {
     size_t pathlen = strlen(pathname);
-    int messageSize = pathlen + 5;
-    messageSize = messageSize + strlen(intToStr(messageSize));
+    int messageSize = pathlen + 6;
     char *omessage = malloc(messageSize);
     sprintf(omessage, "%d!o!%d!%s",messageSize, flags, pathname);
     return omessage;
@@ -133,6 +132,7 @@ int parseOpenResponse(){
         errormsg("Error reading socket response", __FILE__, __LINE__);
         return -1;
     }
+    printf("response: %s\n",buffer);
     int size = getMessageSize(buffer);
     int flag = *(buffer + strlen(size) + 1) - '0';
     buffer = safeAdvanceCharacters(buffer, 2);
@@ -150,7 +150,7 @@ int parseOpenResponse(){
 
 int netopen(const char *pathname, int flags) {
     char *orequest = buildOpenRequest(pathname, flags);
-    printf("%s\n",orequest);
+    printf("message: %s\n",orequest);
     //send request to server
     int wrotebits = sendMessageToSocket(orequest);
     free(orequest);
@@ -168,7 +168,6 @@ int netopen(const char *pathname, int flags) {
 static char *buildReadRequest(int fildes, size_t nbyte) {
     char *rrequest = malloc(200);
     int messageSize = strlen(intToStr(fildes))+strlen(intToStr(nbyte))+5;
-    messageSize = messageSize+strlen(intToStr(messageSize));
     sprintf(rrequest, "%d!r!%zu!%d",messageSize,nbyte,fildes);
     return rrequest;
 }
@@ -178,6 +177,7 @@ ssize_t parseReadResponse(char* buf){
   if((readbits = read(sockfd, buf, 255)) < 0) {
       errormsg("Error reading socket response", __FILE__, __LINE__);
   }
+  printf("response: %s\n",buf);
   int size = getMessageSize(buf);
   //int flag = *(buf + strlen(size) + 1) - '0';
   buf = safeAdvanceCharacters(buf, strlen(intToStr(size))+1);
@@ -197,7 +197,7 @@ ssize_t parseReadResponse(char* buf){
 ssize_t netread(int fildes, void *buf, size_t nbyte) {
     printf("file descriptor %d\n", fildes);
     char *rrequest = buildReadRequest(fildes, nbyte);
-    printf("%s\n",rrequest );
+    printf("message: %s\n",rrequest );
     int wrotebits = sendMessageToSocket(rrequest);
     free(rrequest);
     if(wrotebits < 0) {
@@ -216,8 +216,7 @@ static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
     nullTermBuf[nbyte] = '\0';
     memcpy(nullTermBuf, buf, nbyte);
     char *wrequest = malloc(strlen(intToStr(fildes)) + strlen(intToStr(nbyte))+nbyte + 12);
-    int messageSize = strlen(intToStr(fildes)) + strlen(intToStr(nbyte))+nbyte;
-    messageSize = messageSize + strlen(intToStr(messageSize));
+    int messageSize = strlen(intToStr(fildes)) + strlen(intToStr(nbyte))+nbyte+6;
     sprintf(wrequest, "%d!w!%d!%zu!%s",messageSize,fildes,nbyte,nullTermBuf);
     return wrequest;
 }
@@ -228,6 +227,7 @@ ssize_t parseWriteResponse(){
   if((readbits = read(sockfd, buffer, 255)) < 0) {
       errormsg("Error reading socket response", __FILE__, __LINE__);
   }
+  printf("response: %s\n",buffer);
   int size = getMessageSize(buffer);
   buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
   if(!*buffer) {
@@ -241,7 +241,7 @@ ssize_t parseWriteResponse(){
 ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
     printf("file descriptor %d\n", fildes);
     char *wrequest = buildWriteRequest(fildes, buf, nbyte);
-    printf("%s\n",wrequest);
+    printf("message: %s\n",wrequest);
     int wrotebits = sendMessageToSocket(wrequest);
     free(wrequest);
     if(wrotebits < 0) {
@@ -258,8 +258,7 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
 
 static char *buildCloseRequest(int fildes){
     printf("file descriptor %d\n", fildes);
-    int messageSize = 4+strlen(intToStr(fildes));
-    messageSize = messageSize + strlen(intToStr(messageSize));
+    int messageSize = 3+strlen(intToStr(fildes));
     char *cmessage = malloc(messageSize);
     sprintf(cmessage, "%d!c!%d",messageSize, fildes);
     return cmessage;
@@ -286,6 +285,7 @@ int parseCloseResponse(){
       errormsg("Error reading socket response", __FILE__, __LINE__);
       return -1;
     }
+    printf("response: %s\n",buffer);
     int size = getMessageSize(buffer);
     buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
     if(!*buffer) {
