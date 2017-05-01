@@ -17,6 +17,22 @@
 
 static int sockfd = -1;
 
+char * errnoToCode() {
+    switch(errno) {
+        case EACCES:          return strdup("EACCES");
+        case EINTR:           return strdup("EINTR");
+        case EISDIR:          return strdup("EISDIR");
+        case ENOENT:          return strdup("ENOENT");
+        case ENFILE:          return strdup("ENFILE");
+        case EWOULDBLOCK:     return strdup("EWOULDBLOCK");
+        case ETIMEDOUT:       return strdup("ETIMEDOUT");
+        case EBADF:           return strdup("EBADF");
+        case ECONNRESET:      return strdup("ECONNRESET");
+        case HOST_NOT_FOUND:  return strdup("HOST_NOT_FOUND");
+        default: return NULL;
+    }
+}
+
 void errormsg(const char const * msg, const char const *file, const int line) {
     fprintf(stderr, "[%s : %d] %s\n", file, line, msg);
 }
@@ -119,11 +135,11 @@ int netopen(const char *pathname, int flags) {
     int wrotebits = sendMessageToSocket(orequest);
     free(orequest);
     if(wrotebits < 0) {
-        //error
+      //error
     }
     //read server's response
     parseOpenResponse();
-    
+
     return 0;
 }
 
@@ -136,16 +152,15 @@ int parseOpenResponse(){
     int size = getMessageSize(buffer);
     int flag = *(buffer + strlen(size) + 1) - '0';
     buffer = safeAdvanceCharacters(buffer, 2);
-    if(!*message) {
+    if(!*buffer) {
         //error, hit end of string before finding pathname
     }
     int fd = buildToken(buffer, DELIMITER, true);
     if(fd == -1){
         buffer = safeAdvanceCharacters(buffer, 2);
         return 0;
-        
     }
-
+    printf("%s\n",intToStr(fd));
     return fd;
 }
 
@@ -166,12 +181,30 @@ ssize_t netread(int fildes, void *buf, size_t nbyte) {
         //error
     }
     //read server's response
-    
-    return parseReadResponse();
+
+    return parseReadResponse(buf);
 }
 
-ssize_t parseReadResponse(){
-
+ssize_t parseReadResponse(void* buf){
+  //char buffer[256] = {0};
+  int readbits = 0;
+  if((readbits = read(sockfd, buf, 255)) < 0) {
+      errormsg("Error reading socket response", __FILE__, __LINE__);
+  }
+  int size = getMessageSize(buf);
+  //int flag = *(buf + strlen(size) + 1) - '0';
+  buf = safeAdvanceCharacters(buf, strlen(intToStr(size))+1);
+  if(!*buf) {
+      //error, hit end of string before finding pathname
+  }
+  int nbyte = buildToken(buf, DELIMITER, true);
+  buf = safeAdvanceCharacters(buf, strlen(intToStr(size))+1);
+  if(nbyte == -1){
+    //error
+      return -1;
+  }
+  printf("%s\n",buf);
+  return nbyte;
 }
 
 static char *buildWriteRequest(int fildes, const void *buf, size_t nbyte) {
@@ -194,12 +227,27 @@ ssize_t netwrite(int fildes, const void *buf, size_t nbyte) {
     if(wrotebits < 0) {
         //error
     }
-    parseWriteResponse();
+    int readBytes = parseWriteResponse();
+    if(readBytes>nbyte){
+      //error
+    }
     return 0;
 }
 
 ssize_t parseWriteResponse(){
-    
+  char buffer[256] = {0};
+  int readbits = 0;
+  if((readbits = read(sockfd, buffer, 255)) < 0) {
+      errormsg("Error reading socket response", __FILE__, __LINE__);
+  }
+  int size = getMessageSize(buffer);
+  buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
+  if(!*buffer) {
+      //error, hit end of string before finding pathname
+  }
+  int nbyte = buildToken(buf, DELIMITER, true);
+  printf("%s\n",intToStr(nbyte));
+  return nbyte;
 }
 
 static char *buildCloseRequest(int fildes){
@@ -226,6 +274,21 @@ int netclose(int fd) {
 }
 
 int parseCloseResponse(){
+    char buffer[256] = {0};
+    int readbits = 0;
+    if((readbits = read(sockfd, buffer, 255)) < 0) {
+      errormsg("Error reading socket response", __FILE__, __LINE__);
+    }
+    int size = getMessageSize(buffer);
+    buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
+    if(!*buffer) {
+        //error, hit end of string before finding pathname
+    }
+    int num = buildToken(buf, DELIMITER, true);
+    if(num == -1){
+      buffer = safeAdvanceCharacters(buffer, strlen(intToStr(size))+1);
+      char* error = buildToken(buffer);
+    }
 
 }
 
